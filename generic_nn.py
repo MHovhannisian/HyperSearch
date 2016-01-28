@@ -8,6 +8,7 @@ This interface is modelled on the scikit-learn interface.
 '''
 
 from sklearn.cross_validation import KFold
+from sklearn import preprocessing
 
 from sklearn.neural_network import MLPClassifier as sklearn_MLPClassifier
 
@@ -38,7 +39,7 @@ class NN_Compare:
     '''
 
     def __init__(self, X, Y, k_folds=4):
-        self.X = np.array(X)
+        self.X = np.array(X).astype('float64')
         self.Y = np.array(Y).astype(bool)
 
         try:
@@ -80,6 +81,11 @@ class NN_Compare:
         for train_idx, test_idx in self.k_fold:
             X_train, X_test = self.X[train_idx], self.X[test_idx]
             Y_train, Y_test = self.Y[train_idx], self.Y[test_idx]
+
+            # Train the normaliser on training data only (to not cheat)
+            normaliser = preprocessing.StandardScaler().fit(X_train)
+            X_train = normaliser.transform(X_train)
+            X_test = normaliser.transform(X_test)
 
             Y_test_predicted = nntypes[nntype](X_train, Y_train, X_test)
 
