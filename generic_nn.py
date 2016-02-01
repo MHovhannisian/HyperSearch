@@ -20,7 +20,7 @@ from pybrain.tools.shortcuts import buildNetwork
 from pybrain.supervised.trainers import BackpropTrainer
 from pybrain.datasets            import ClassificationDataSet, SupervisedDataSet
 from pybrain.utilities           import percentError
-from pybrain.structure import LinearLayer, SigmoidLayer
+from pybrain.structure import LinearLayer, SigmoidLayer, TanhLayer
 from pybrain.structure import FullConnection
 
 from keras.models import Sequential
@@ -53,7 +53,18 @@ class NN_Compare:
         self.n_outcomes = self.Y.shape[1]
 
         self.settings = {
-            'hidden_layer_sizes' : (13,)
+            # Settings which are natively understood by scikit-learn
+            'hidden_layer_sizes' : (15,),
+            'activation' : 'relu'
+        }
+
+        self.supported_settings = {
+            'activation' : {
+                'relu' : ['sklearn', 'sknn', 'keras'],
+                'linear' : ['sknn', 'pybrain', 'keras'],
+                'logistic' : ['sklearn', 'sknn', 'pybrain', 'keras'],
+                'tanh' : ['sklearn', 'sknn', 'pybrain', 'keras']
+            }
         }
 
         self.k_folds = k_folds
@@ -67,12 +78,12 @@ class NN_Compare:
         self.settings.update(new_settings)
         return self
 
-    def run_test(self, nntype='sklearn_MLP'):
+    def run_test(self, nntype):
         nntypes = {
-            'sklearn_MLP' : self.sklearn_MLP,
-            'sknn_MLP'    : self.sknn_MLP,
-            'pybrain_MLP' : self.pybrain_MLP,
-            'keras_MLP'    : self.keras_MLP
+            'sklearn' : self.sklearn,
+            'sknn'    : self.sknn,
+            'pybrain' : self.pybrain,
+            'keras'    : self.keras
         }
 
         F_score = 0.0
@@ -97,54 +108,85 @@ class NN_Compare:
         # return F_score, percent_score
         return Y_test_predicted
 
-    def keras_MLP(self, X_train, Y_train, X_test):
+    def keras(self, X_train, Y_train, X_test):
+        # Settings conversion
+        activation_dict = {'relu': 'relu', 'linear': 'linear', 'logistic': 'sigmoid', 'tanh': 'tanh'}
+        try:
+            activation = activation_dict[self.settings['activation']]
+        except KeyError:
+            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
+            print "not supported in keras."
+            exit()
+
+        # Create nn architecture
         nn = Sequential()
 
-        nn.add(Dense(self.settings['hidden_layer_sizes'][0],
-                        input_dim=self.n_features,
-                        init='uniform')
-                 )
-        nn.add(Activation('linear'))
+        nn.add(Dense(
+            self.settings['hidden_layer_sizes'][0],
+            input_dim=self.n_features,
+            init='uniform',
+            activation=activation)
+        )
         nn.add(Dropout(0.5))
 
-        nn.add(Dense(self.n_outcomes, init='uniform'))
-        nn.add(Activation('softmax'))
+        nn.add(Dense(
+            self.n_outcomes,
+            init='uniform',
+            activation='softmax')
+        )
 
         sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
 
         nn.compile(loss='mean_squared_error', optimizer=sgd)
 
         nn.fit(X_train, Y_train, nb_epoch=1, batch_size=16)
-        plot(nn, to_file='model.png')
 
         return nn.predict_proba(X_test)
 
-    def sklearn_MLP(self, X_train, Y_train, X_test):
+    def sklearn(self, X_train, Y_train, X_test):
         nn = sklearn_MLPClassifier(**self.settings)
         nn.fit(X_train, Y_train)
-        print nn
         Y_test_predicted = nn.predict_proba(X_test)
         return Y_test_predicted
 
-    def sknn_MLP(self, X_train, Y_train, X_test):
+    def sknn(self, X_train, Y_train, X_test):
+        # Settings conversion
+        activation_dict = {'relu': 'Rectifier', 'linear': 'Linear', 'logistic': 'Sigmoid', 'tanh': 'Tanh'}
+        try:
+            activation = activation_dict[self.settings['activation']]
+        except KeyError:
+            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
+            print "not supported in sknn."
+            exit()
+
         nn = sknn_MLPClassifier(
-                layers=[Layer("Rectifier", units=self.settings['hidden_layer_sizes'][0]),
-                        Layer("Sigmoid")],
+                layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0]),
+                        Layer("Softmax")],
+                n_iter=2,
                 verbose=True
         )
 
         nn.fit(X_train, Y_train)
-        Y_test_predicted = nn.predict(X_test)
+        Y_test_predicted = nn.predict_proba(X_test)
         return Y_test_predicted
 
-    def pybrain_MLP(self, X_train, Y_train, X_test):
+    def pybrain(self, X_train, Y_train, X_test):
+        # Settings conversion
+        activation_dict = {'linear': LinearLayer, 'logistic': SigmoidLayer, 'tanh': TanhLayer}
+        try:
+            hiddenLayerType = activation_dict[self.settings['activation']]
+        except KeyError:
+            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
+            print "not supported in pybrain."
+            exit()
+
         # nn = buildNetwork(self.n_features, self.settings['hidden_layer_sizes'][0],
                           # self.n_outcomes, outclass=SoftmaxLayer)
         nn = FeedForwardNetwork()
 
         inLayer = LinearLayer(self.n_features)
-        hiddenLayer = LinearLayer(self.settings['hidden_layer_sizes'][0])
-        outLayer = SigmoidLayer(self.n_outcomes)
+        hiddenLayer = hiddenLayerType(self.settings['hidden_layer_sizes'][0])
+        outLayer = SoftmaxLayer(self.n_outcomes)
 
         nn.addInputModule(inLayer)
         nn.addModule(hiddenLayer)
