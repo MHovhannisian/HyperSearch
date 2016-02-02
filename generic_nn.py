@@ -23,12 +23,15 @@ from pybrain.utilities           import percentError
 from pybrain.structure import LinearLayer, SigmoidLayer, TanhLayer
 from pybrain.structure import FullConnection
 
+import numpy as np
+# NOTE: This is the only simple way to get reproducable results in Keras.
+np.random.seed(1)
+
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD
 from keras.utils.visualize_util import plot
-
-import numpy as np
+from keras.regularizers import l2
 
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
@@ -51,13 +54,34 @@ class NN_Compare:
         self.n_samples = self.Y.shape[0]
         self.n_features = self.X.shape[1]
         self.n_outcomes = self.Y.shape[1]
+        self.kfold_seed = 1
 
+        # Settings which are natively understood by scikit-learn
+        # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
         self.settings = {
-            # Settings which are natively understood by scikit-learn
+            # Architecture
             'hidden_layer_sizes' : (15,),
-            'activation' : 'relu'
+            'activation' : 'relu',
+
+            # Regularisation
+            'alpha' : 0.0002, # L2 penalty. 0.0 = turned off.
+
+            # Learning
+            'learning_rate_init' : 0.001,
+            'algorithm' : 'sgd',
+            # SGD only
+            'momentum' : 0.9,
+            'nesterovs_momentum' : True,
+
+            # Consistent output (for developing and debugging)
+            # Doesn't work in Keras (there's a hack though -- see the imports)
+            # Doesn't work in PyBrain and no known hack :(
+            'random_state' : 1
         }
 
+        # For settings which take a categorical value, provided is a dict of
+        # which settings should work in which of the Python modules.
+        # This dict exists only for reference. It is not used for computaton.
         self.supported_settings = {
             'activation' : {
                 'relu' : ['sklearn', 'sknn', 'keras'],
@@ -69,7 +93,7 @@ class NN_Compare:
 
         self.k_folds = k_folds
         self.k_fold = KFold(self.n_samples, n_folds=k_folds, shuffle=True,
-                            random_state=1)
+                            random_state=self.kfold_seed)
 
     def get_settings(self):
         return self.settings
@@ -115,8 +139,8 @@ class NN_Compare:
             activation = activation_dict[self.settings['activation']]
         except KeyError:
             print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in keras."
-            exit()
+            print "not supported in Keras."
+            raise NotImplementedError
 
         # Create nn architecture
         nn = Sequential()
@@ -127,7 +151,7 @@ class NN_Compare:
             init='uniform',
             activation=activation)
         )
-        nn.add(Dropout(0.5))
+        # nn.add(Dropout(0.5))
 
         nn.add(Dense(
             self.n_outcomes,
@@ -135,7 +159,18 @@ class NN_Compare:
             activation='softmax')
         )
 
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
+        print self.settings
+
+        if self.settings['algorithm'] == 'sgd':
+            sgd = SGD(
+                lr=self.settings['learning_rate_init'],
+                decay=1e-6,
+                momentum=self.settings['momentum'],
+                nesterov=self.settings['nesterovs_momentum'],
+            )
+        else:
+            print "ERROR: Only SGD is implemented in Keras at present."
+            raise NotImplementedError
 
         nn.compile(loss='mean_squared_error', optimizer=sgd)
 
@@ -145,43 +180,83 @@ class NN_Compare:
 
     def sklearn(self, X_train, Y_train, X_test):
         nn = sklearn_MLPClassifier(**self.settings)
+        print nn
         nn.fit(X_train, Y_train)
         Y_test_predicted = nn.predict_proba(X_test)
         return Y_test_predicted
 
     def sknn(self, X_train, Y_train, X_test):
-        # Settings conversion
+
+        #########################
+        #  Settings conversion  #
+        #########################
+
         activation_dict = {'relu': 'Rectifier', 'linear': 'Linear', 'logistic': 'Sigmoid', 'tanh': 'Tanh'}
         try:
             activation = activation_dict[self.settings['activation']]
         except KeyError:
             print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in sknn."
-            exit()
+            print "not supported in SKNN."
+            raise NotImplementedError
+
+        if self.settings['algorithm'] == 'sgd':
+            if self.settings['momentum'] == 0.0:
+                learning_rule='sgd'
+            elif self.settings['nesterovs_momentum'] == True:
+                learning_rule='nesterov'
+            else:
+                learning_rule='momentum'
+        else:
+            raise NotImplementedError
+
+        ###############
+        #  Create NN  #
+        ###############
 
         nn = sknn_MLPClassifier(
+                # NN architecture
                 layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0]),
                         Layer("Softmax")],
-                n_iter=2,
+
+                # Learning settings
+                learning_rate=self.settings['learning_rate_init'],
+                learning_rule=learning_rule,
+                learning_momentum=self.settings['momentum'],
+
+                # dropout_rate=0.5,
+                # weight_decay=0.0001,
+                n_iter=10,
+                random_state=self.settings['random_state'],
                 verbose=True
         )
 
+        print nn
         nn.fit(X_train, Y_train)
         Y_test_predicted = nn.predict_proba(X_test)
         return Y_test_predicted
 
     def pybrain(self, X_train, Y_train, X_test):
-        # Settings conversion
+
+        #########################
+        #  Settings conversion  #
+        #########################
+
         activation_dict = {'linear': LinearLayer, 'logistic': SigmoidLayer, 'tanh': TanhLayer}
         try:
             hiddenLayerType = activation_dict[self.settings['activation']]
         except KeyError:
             print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in pybrain."
-            exit()
+            print "not supported in PyBrain."
+            raise NotImplementedError
 
-        # nn = buildNetwork(self.n_features, self.settings['hidden_layer_sizes'][0],
-                          # self.n_outcomes, outclass=SoftmaxLayer)
+        if self.settings['nesterovs_momentum'] == True:
+            print "ERROR: Nesterov's momentum is not supported in PyBrain."
+            raise NotImplementedError
+
+        ###############
+        #  Create NN  #
+        ###############
+
         nn = FeedForwardNetwork()
 
         inLayer = LinearLayer(self.n_features)
@@ -209,8 +284,19 @@ class NN_Compare:
         test.setField('input', X_test)
         test.setField('target', Y_test)
 
-        trainer = BackpropTrainer(nn, dataset=train, momentum=0.1, verbose=True, weightdecay=0.01)
-        trainer.trainEpochs(1)
+        if self.settings['algorithm'] == 'sgd':
+            trainer = BackpropTrainer(
+                nn,
+                learningrate=self.settings['learning_rate_init'],
+                dataset=train,
+                momentum=self.settings['momentum'],
+                verbose=True,
+            )
+        else:
+            print "ERROR: Only SGD is implemented in PyBrain at present."
+            raise NotImplementedError
+
+        trainer.trainEpochs(2)
 
         out = nn.activateOnDataset(test)
         return out
