@@ -29,7 +29,7 @@ np.random.seed(1)
 
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adam
 from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 
@@ -56,24 +56,46 @@ class NN_Compare:
         self.n_outcomes = self.Y.shape[1]
         self.kfold_seed = 1
 
-        # Settings which are natively understood by scikit-learn
+        # Settings which are natively understood by scikit-learn are implemented
+        # exactly as in the scikit-learn documentation
         # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
+        # Other settings have a comment starting with # !!
         self.settings = {
-            # Architecture
+            ##################
+            #  Architecture  #
+            ##################
             'hidden_layer_sizes' : (15,),
-            'activation' : 'relu',
+            'activation' : 'tanh',
 
-            # Regularisation
-            'alpha' : 0.0002, # L2 penalty. 0.0 = turned off.
+            ####################
+            #  Regularisation  #
+            ####################
+            'alpha' : 0.0001, # L2 penalty. 0.0 = turned off.
 
-            # Learning
+            ##############
+            #  Learning  #
+            ##############
             'learning_rate_init' : 0.001,
             'algorithm' : 'sgd',
+
             # SGD only
             'momentum' : 0.9,
-            'nesterovs_momentum' : True,
+            'nesterovs_momentum' : False,
+            'learning_rate' : 'constant',
+            # !! For learning_rate='factor' in Keras/PyBrain, implemented so
+            # very low is like 'constant'
+            'learning_decay' : 0.001,
+            # Only for Scikit-learn's 'learning_rate:'invscaling'
+            'power_t' : 0.5,
 
-            # Consistent output (for developing and debugging)
+            # Adam only (Scikit-learn and Keras only)
+            'beta_1' : 0.9,
+            'beta_2' : 0.999,
+            'epsilon' : 1e-8,
+
+            #######################
+            #  Consistent output  # (for developing and debugging)
+            #######################
             # Doesn't work in Keras (there's a hack though -- see the imports)
             # Doesn't work in PyBrain and no known hack :(
             'random_state' : 1
@@ -88,6 +110,23 @@ class NN_Compare:
                 'linear' : ['sknn', 'pybrain', 'keras'],
                 'logistic' : ['sklearn', 'sknn', 'pybrain', 'keras'],
                 'tanh' : ['sklearn', 'sknn', 'pybrain', 'keras']
+            },
+
+            'nesterovs_momentum' : {
+                True : ['sklearn', 'sknn', 'keras'],
+                False : ['sklearn', 'sknn', 'pybrain', 'keras']
+            },
+
+            'algorithm' : {
+                'sgd' : ['sklearn', 'sknn', 'pybrain', 'keras'],
+                'adam' : ['sklearn', 'keras']
+            },
+
+            'learning_rate' : { # How the learning rate changes. Only sgd.
+                'constant' : ['sklearn', 'sknn', 'pybrain', 'keras'],
+                'invscaling' : ['sklearn'],
+                'adapative' : ['sklearn'],
+                'factor' : ['keras', 'pybrain']
             }
         }
 
@@ -133,7 +172,11 @@ class NN_Compare:
         return Y_test_predicted
 
     def keras(self, X_train, Y_train, X_test):
-        # Settings conversion
+
+        #########################
+        #  Settings conversion  #
+        #########################
+
         activation_dict = {'relu': 'relu', 'linear': 'linear', 'logistic': 'sigmoid', 'tanh': 'tanh'}
         try:
             activation = activation_dict[self.settings['activation']]
@@ -142,13 +185,26 @@ class NN_Compare:
             print "not supported in Keras."
             raise NotImplementedError
 
-        # Create nn architecture
+        if self.settings['learning_rate'] == 'factor':
+            sgd_decay = self.settings['learning_decay']
+        elif self.settings['learning_rate'] == 'constant':
+            sgd_decay = 0.0
+        else:
+            print "ERROR: Learning decay style \"" + self.settings['learning_rate'] + "\"",
+            print "not supported in Keras."
+            raise NotImplementedError
+
+        ###############
+        #  Create NN  #
+        ###############
+
         nn = Sequential()
 
         nn.add(Dense(
             self.settings['hidden_layer_sizes'][0],
             input_dim=self.n_features,
             init='uniform',
+            W_regularizer=l2(self.settings['alpha']),
             activation=activation)
         )
         # nn.add(Dropout(0.5))
@@ -156,30 +212,54 @@ class NN_Compare:
         nn.add(Dense(
             self.n_outcomes,
             init='uniform',
+            W_regularizer=l2(self.settings['alpha']),
             activation='softmax')
         )
 
-        print self.settings
-
         if self.settings['algorithm'] == 'sgd':
-            sgd = SGD(
+            optimiser = SGD(
                 lr=self.settings['learning_rate_init'],
-                decay=1e-6,
+                decay=sgd_decay,
                 momentum=self.settings['momentum'],
                 nesterov=self.settings['nesterovs_momentum'],
             )
+        elif self.settings['algorithm'] == 'adam':
+            optimiser = Adam(
+                lr=self.settings['learning_rate_init'],
+                beta_1=self.settings['beta_1'],
+                beta_2=self.settings['beta_2'],
+                epsilon=self.settings['epsilon']
+            )
         else:
-            print "ERROR: Only SGD is implemented in Keras at present."
+            print "ERROR:", self.settings['algorithm'], "not implemented in Keras at present."
             raise NotImplementedError
 
-        nn.compile(loss='mean_squared_error', optimizer=sgd)
-
+        nn.compile(loss='mean_squared_error', optimizer=optimiser)
         nn.fit(X_train, Y_train, nb_epoch=1, batch_size=16)
 
         return nn.predict_proba(X_test)
 
     def sklearn(self, X_train, Y_train, X_test):
-        nn = sklearn_MLPClassifier(**self.settings)
+
+        #####################################################
+        #  Strip settings that are unrecognised by sklearn  #
+        #####################################################
+
+        valid_keys = [
+            'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
+            'learning_rate', 'max_iter', 'random_state', 'shuffle', 'tol',
+            'learning_rate_init', 'power_t', 'verbose', 'warm_start',
+            'momentum', 'nesterovs_momentum', 'early_stopping',
+            'validation_fraction', 'beta_1', 'beta_2', 'epsilon', 'algorithm'
+        ]
+
+        sklearn_settings = {key: val for key, val in self.settings.items() if key in valid_keys}
+
+        ###############
+        #  Create NN  #
+        ###############
+
+        nn = sklearn_MLPClassifier(**sklearn_settings)
         print nn
         nn.fit(X_train, Y_train)
         Y_test_predicted = nn.predict_proba(X_test)
@@ -207,6 +287,11 @@ class NN_Compare:
             else:
                 learning_rule='momentum'
         else:
+            print "ERROR: Only SGD is implemented in Scikit-NN at present."
+            raise NotImplementedError
+
+        if self.settings['learning_rate'] != 'constant':
+            print "ERROR: Learning decay not supported in SKNN (!)"
             raise NotImplementedError
 
         ###############
@@ -214,25 +299,31 @@ class NN_Compare:
         ###############
 
         nn = sknn_MLPClassifier(
-                # NN architecture
-                layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0]),
-                        Layer("Softmax")],
+            # NN architecture
+            layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0]),
+                    Layer("Softmax")],
 
-                # Learning settings
-                learning_rate=self.settings['learning_rate_init'],
-                learning_rule=learning_rule,
-                learning_momentum=self.settings['momentum'],
+            # Learning settings
+            learning_rate=self.settings['learning_rate_init'],
+            learning_rule=learning_rule,
+            learning_momentum=self.settings['momentum'],
 
-                # dropout_rate=0.5,
-                # weight_decay=0.0001,
-                n_iter=10,
-                random_state=self.settings['random_state'],
-                verbose=True
+            # Regularisation
+            # regularize="L2",
+            # dropout_rate=0.5,
+
+            n_iter=3,
+            random_state=self.settings['random_state'],
+            verbose=True
         )
 
         print nn
         nn.fit(X_train, Y_train)
-        Y_test_predicted = nn.predict_proba(X_test)
+
+        # NOTE: predict_proba returns 2 entries per binary class, which are
+        # True and False and add to give 1.0. We take the probability of True.
+        Y_test_predicted = nn.predict_proba(X_test)[:, 1::2]
+
         return Y_test_predicted
 
     def pybrain(self, X_train, Y_train, X_test):
@@ -251,6 +342,22 @@ class NN_Compare:
 
         if self.settings['nesterovs_momentum'] == True:
             print "ERROR: Nesterov's momentum is not supported in PyBrain."
+            raise NotImplementedError
+
+        if self.settings['algorithm'] != 'sgd':
+            print "ERROR: Only weight optimisation algorithm 'sgd' is",
+            print "supported in PyBrain."
+            raise NotImplementedError
+
+        if self.settings['learning_rate'] == 'factor':
+            # Unlike in Keras, 1.0 is off and 0.0 is maximum learning decay
+            # To keep 0.0 as off, we take 1.0 - learning_decay
+            sgd_decay = 1.0 - self.settings['learning_decay']
+        elif self.settings['learning_rate'] == 'constant':
+            sgd_decay = 1.0
+        else:
+            print "ERROR: Learning decay style \"" + self.settings['learning_rate'] + "\"",
+            print "not supported in PyBrain."
             raise NotImplementedError
 
         ###############
@@ -288,6 +395,8 @@ class NN_Compare:
             trainer = BackpropTrainer(
                 nn,
                 learningrate=self.settings['learning_rate_init'],
+                weightdecay=self.settings['alpha'],
+                lrdecay=sgd_decay,
                 dataset=train,
                 momentum=self.settings['momentum'],
                 verbose=True,
