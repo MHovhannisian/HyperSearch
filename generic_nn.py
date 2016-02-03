@@ -33,6 +33,7 @@ from keras.optimizers import SGD, Adam
 from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 
+np.random.seed(1)
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
         from disparate Python models on the same data and conveniently
@@ -57,26 +58,28 @@ class NN_Compare:
         self.kfold_seed = 1
 
         # Settings which are natively understood by scikit-learn are implemented
-        # exactly as in the scikit-learn documentation
+        # exactly as in the scikit-learn documentation:
         # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
-        # Other settings have a comment starting with # !!
+        # Other settings have a comment starting with "# !!"
         self.settings = {
             ##################
             #  Architecture  #
             ##################
             'hidden_layer_sizes' : (15,),
-            'activation' : 'tanh',
+            'activation' : 'relu',
 
             ####################
             #  Regularisation  #
             ####################
-            'alpha' : 0.0001, # L2 penalty. 0.0 = turned off.
+            'alpha' : 0.0000, # L2 penalty. 0.0 = turned off.
+            'dropout' : 0.0, # !! Dropout between hidden and output layers.
 
             ##############
             #  Learning  #
             ##############
             'learning_rate_init' : 0.001,
             'algorithm' : 'sgd',
+            'batch_size' : 16,
 
             # SGD only
             'momentum' : 0.9,
@@ -84,8 +87,8 @@ class NN_Compare:
             'learning_rate' : 'constant',
             # !! For learning_rate='factor' in Keras/PyBrain, implemented so
             # very low is like 'constant'
-            'learning_decay' : 0.001,
-            # Only for Scikit-learn's 'learning_rate:'invscaling'
+            'learning_decay' : 0.000,
+            # Only for Scikit-learn's 'learning_rate':'invscaling'
             'power_t' : 0.5,
 
             # Adam only (Scikit-learn and Keras only)
@@ -194,6 +197,9 @@ class NN_Compare:
             print "not supported in Keras."
             raise NotImplementedError
 
+        if self.settings['dropout'] != 0.0:
+            print "WARNING: I am not convinced that dropout is working correctly in Keras."
+
         ###############
         #  Create NN  #
         ###############
@@ -203,15 +209,16 @@ class NN_Compare:
         nn.add(Dense(
             self.settings['hidden_layer_sizes'][0],
             input_dim=self.n_features,
-            init='uniform',
+            init='lecun_uniform',
             W_regularizer=l2(self.settings['alpha']),
             activation=activation)
         )
-        # nn.add(Dropout(0.5))
+
+        nn.add(Dropout(self.settings['dropout']))
 
         nn.add(Dense(
             self.n_outcomes,
-            init='uniform',
+            init='lecun_uniform',
             W_regularizer=l2(self.settings['alpha']),
             activation='softmax')
         )
@@ -234,8 +241,12 @@ class NN_Compare:
             print "ERROR:", self.settings['algorithm'], "not implemented in Keras at present."
             raise NotImplementedError
 
-        nn.compile(loss='mean_squared_error', optimizer=optimiser)
-        nn.fit(X_train, Y_train, nb_epoch=1, batch_size=16)
+        nn.compile(loss='categorical_crossentropy', optimizer=optimiser)
+        nn.fit(
+            X_train, Y_train,
+            nb_epoch=3,
+            batch_size=self.settings['batch_size']
+        )
 
         return nn.predict_proba(X_test)
 
@@ -244,6 +255,17 @@ class NN_Compare:
         #####################################################
         #  Strip settings that are unrecognised by sklearn  #
         #####################################################
+
+        unsupported_keys = ['dropout', 'learning_decay']
+        bad_settings = [self.settings[key] > 0 for key in unsupported_keys]
+
+        if any(bad_settings):
+            print "ERROR: The following settings which are unsupported by",
+            print "scikit-learn are currently not set to 0.0:"
+            for i, key in enumerate(unsupported_keys):
+                if bad_settings[i]:
+                    print key + ":", self.settings[key]
+            raise NotImplementedError
 
         valid_keys = [
             'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
@@ -294,27 +316,33 @@ class NN_Compare:
             print "ERROR: Learning decay not supported in SKNN (!)"
             raise NotImplementedError
 
+        if self.settings['alpha'] != 0.0:
+            print "WARNING: I am not convinced that L2 is working in SKNN"
+            print "Dropout works, though."
+
         ###############
         #  Create NN  #
         ###############
 
         nn = sknn_MLPClassifier(
+
             # NN architecture
-            layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0]),
-                    Layer("Softmax")],
+            layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0],),
+                    Layer("Softmax", units=2*self.n_outcomes)],
 
             # Learning settings
+            loss_type='mcc',
             learning_rate=self.settings['learning_rate_init'],
             learning_rule=learning_rule,
             learning_momentum=self.settings['momentum'],
+            batch_size=self.settings['batch_size'],
+            n_iter=30,
 
             # Regularisation
-            # regularize="L2",
-            # dropout_rate=0.5,
+            weight_decay=self.settings['alpha'],
+            dropout_rate=self.settings['dropout'],
 
-            n_iter=3,
             random_state=self.settings['random_state'],
-            verbose=True
         )
 
         print nn
@@ -408,6 +436,7 @@ class NN_Compare:
         trainer.trainEpochs(2)
 
         out = nn.activateOnDataset(test)
+
         return out
 
     def get_score(self, predictions, answers):
