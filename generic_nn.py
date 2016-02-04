@@ -101,7 +101,30 @@ class NN_Compare:
             #######################
             # Doesn't work in Keras (there's a hack though -- see the imports)
             # Doesn't work in PyBrain and no known hack :(
-            'random_state' : 1
+            'random_state' : 1,
+
+            #######################################
+            #  Stopping criteria - DO NOT CHANGE  #
+            #######################################
+            # Stopping is handled manually by this class through the
+            # self.stopping_settings dict. This section is just to set up
+            # scikt-learn correctly. They are placed here for visiblity.
+            'warm_start' : True,
+            'max_iter' : 1, # In scikit-learn (and sknn), "iter" really means epoch.
+        }
+
+        # Stopping conditions are homogenised through this dict.
+        # Note that these differ from sklearn's stopping criteria.
+        self.stopping_settings = {
+            # Epochs to run for if no convergence. Note that max iterations
+            # are not specified but inferred from max_epoch and batch_size
+            'max_epoch' : 3,
+
+            # Max decline in loss between epochs to consider converged. (Ratio)
+            'epoch_tol' : 0.02,
+
+            # Number of consecutive epochs considered converged before stopping.
+            'n_stable' : 3,
         }
 
         # For settings which take a categorical value, provided is a dict of
@@ -141,7 +164,13 @@ class NN_Compare:
         return self.settings
 
     def set_settings(self, new_settings):
+        ''' Set the main neural network dict's settings '''
         self.settings.update(new_settings)
+        return self
+
+    def set_stopping(self, new_settings):
+        ''' Set the stopping criterion dict's settings '''
+        self.stopping_settings.update(new_settings)
         return self
 
     def run_test(self, nntype):
@@ -149,7 +178,7 @@ class NN_Compare:
             'sklearn' : self.sklearn,
             'sknn'    : self.sknn,
             'pybrain' : self.pybrain,
-            'keras'    : self.keras
+            'keras'   : self.keras
         }
 
         F_score = 0.0
@@ -204,9 +233,9 @@ class NN_Compare:
         #  Create NN  #
         ###############
 
-        nn = Sequential()
+        keras_nn = Sequential()
 
-        nn.add(Dense(
+        keras_nn.add(Dense(
             self.settings['hidden_layer_sizes'][0],
             input_dim=self.n_features,
             init='lecun_uniform',
@@ -214,9 +243,9 @@ class NN_Compare:
             activation=activation)
         )
 
-        nn.add(Dropout(self.settings['dropout']))
+        keras_nn.add(Dropout(self.settings['dropout']))
 
-        nn.add(Dense(
+        keras_nn.add(Dense(
             self.n_outcomes,
             init='lecun_uniform',
             W_regularizer=l2(self.settings['alpha']),
@@ -241,14 +270,36 @@ class NN_Compare:
             print "ERROR:", self.settings['algorithm'], "not implemented in Keras at present."
             raise NotImplementedError
 
-        nn.compile(loss='categorical_crossentropy', optimizer=optimiser)
-        nn.fit(
-            X_train, Y_train,
-            nb_epoch=3,
-            batch_size=self.settings['batch_size']
-        )
+        keras_nn.compile(loss='categorical_crossentropy', optimizer=optimiser)
 
-        return nn.predict_proba(X_test)
+        ##############
+        #  Train NN  #
+        ##############
+
+        loss = []
+        n_loss = [0]
+        stop_reason = 0
+
+        for i in range(self.stopping_settings['max_epoch']):
+            history = keras_nn.fit(
+                X_train, Y_train,
+                nb_epoch=1,
+                batch_size=self.settings['batch_size'],
+                verbose=0,
+            )
+
+            loss.append(history.history['loss'][0])
+
+            # Use change in loss to evaluate stability
+            if self.converged(loss, n_loss):
+                stop_reason = 1
+                break
+
+        print loss
+        print len(loss)
+        keras_predictions = keras_nn.predict_proba(X_test, verbose=0)
+
+        return keras_predictions
 
     def sklearn(self, X_train, Y_train, X_test):
 
@@ -281,10 +332,29 @@ class NN_Compare:
         #  Create NN  #
         ###############
 
-        nn = sklearn_MLPClassifier(**sklearn_settings)
-        print nn
-        nn.fit(X_train, Y_train)
-        Y_test_predicted = nn.predict_proba(X_test)
+        sklearn_nn = sklearn_MLPClassifier(**sklearn_settings)
+        print sklearn_nn
+
+        ##############
+        #  Train NN  #
+        ##############
+
+        loss = []
+        n_loss = [0]
+        stop_reason = 0
+
+        for i in range(self.stopping_settings['max_epoch']):
+            sklearn_nn.fit(X_train, Y_train)
+            loss = sklearn_nn.loss_curve_ # sklearn itself keeps a list across fits
+
+            # Use change in loss to evaluate stability
+            if self.converged(loss, n_loss):
+                stop_reason = 1
+                break
+
+        print loss
+        print len(loss)
+        Y_test_predicted = sklearn_nn.predict_proba(X_test)
         return Y_test_predicted
 
     def sknn(self, X_train, Y_train, X_test):
@@ -320,13 +390,20 @@ class NN_Compare:
             print "WARNING: I am not convinced that L2 is working in SKNN"
             print "Dropout works, though."
 
+        # The contents of a mutable variable can be changed in a closure.
+        # SKNN doesn't give access to the loss in the end-of-epoch callback,
+        # only in the end-of-batch callback.
+        batch_loss = [0]
+        def batch_callback(**variables):
+            batch_loss[0] = variables['loss']/variables['count']
+
         ###############
         #  Create NN  #
         ###############
 
-        nn = sknn_MLPClassifier(
+        sknn_nn = sknn_MLPClassifier(
 
-            # NN architecture
+            # sknn_nn architecture
             layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0],),
                     Layer("Softmax", units=2*self.n_outcomes)],
 
@@ -336,21 +413,46 @@ class NN_Compare:
             learning_rule=learning_rule,
             learning_momentum=self.settings['momentum'],
             batch_size=self.settings['batch_size'],
-            n_iter=30,
+            n_iter=1,
 
             # Regularisation
             weight_decay=self.settings['alpha'],
             dropout_rate=self.settings['dropout'],
 
             random_state=self.settings['random_state'],
+
+            # Callback to get loss
+            callback = {'on_batch_finish': batch_callback},
+
+            verbose=1
         )
 
-        print nn
-        nn.fit(X_train, Y_train)
+        print sknn_nn
+
+        ##############
+        #  Train NN  #
+        ##############
+
+        loss = []
+        n_loss = [0]
+        stop_reason = 0
+
+        for i in range(self.stopping_settings['max_epoch']):
+            sknn_nn.fit(X_train, Y_train)
+            loss.append(batch_loss[0])
+
+            # Use change in loss to evaluate stability
+            if self.converged(loss, n_loss):
+                stop_reason = 1
+                break
+
+        print X_train.shape
+        print loss
+        print len(loss)
 
         # NOTE: predict_proba returns 2 entries per binary class, which are
         # True and False and add to give 1.0. We take the probability of True.
-        Y_test_predicted = nn.predict_proba(X_test)[:, 1::2]
+        Y_test_predicted = sknn_nn.predict_proba(X_test)[:, 1::2]
 
         return Y_test_predicted
 
@@ -444,8 +546,8 @@ class NN_Compare:
             Requires predictions and answers in 0 and 1 int or bool format.
         '''
         predicted_positives = (predictions == 1)
-        print predicted_positives
-        print answers
+        # print predicted_positives
+        # print answers
         true_positives = (predicted_positives & answers)
         false_positives = (predicted_positives & np.logical_not(answers))
         correct_predictions = (predictions == answers)
@@ -456,3 +558,33 @@ class NN_Compare:
         score = float(correct_predictions.sum())/(predictions.shape[0]*predictions.shape[1])
 
         return F1, score
+
+    def converged(self, loss, n_loss):
+        ''' Inputs:
+
+            loss: Loss at end of each epoch until now
+            n_loss: Length of previous stability streak
+
+            Returns:
+
+            True if converged according to settings
+            False if not converged according to settings
+
+            Updates n_loss as a side-effect.
+        '''
+
+        try:
+            loss_ratio = 1 - (loss[-1]/loss[-2])
+        except IndexError:
+            return False
+
+        if loss_ratio < self.stopping_settings['epoch_tol']:
+            n_loss[0] += 1
+        else:
+            n_loss[0] = 0
+
+        if n_loss[0] == self.stopping_settings['n_stable']:
+            return True
+        else:
+            return False
+
