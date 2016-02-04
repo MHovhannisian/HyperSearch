@@ -14,15 +14,6 @@ from sklearn.neural_network import MLPClassifier as sklearn_MLPClassifier
 
 from sknn.mlp import Classifier as sknn_MLPClassifier, Layer
 
-from pybrain.structure import FeedForwardNetwork
-from pybrain.structure.modules import SoftmaxLayer
-from pybrain.tools.shortcuts import buildNetwork
-from pybrain.supervised.trainers import BackpropTrainer
-from pybrain.datasets            import ClassificationDataSet, SupervisedDataSet
-from pybrain.utilities           import percentError
-from pybrain.structure import LinearLayer, SigmoidLayer, TanhLayer
-from pybrain.structure import FullConnection
-
 import numpy as np
 # NOTE: This is the only simple way to get reproducable results in Keras.
 np.random.seed(1)
@@ -85,7 +76,7 @@ class NN_Compare:
             'momentum' : 0.9,
             'nesterovs_momentum' : False,
             'learning_rate' : 'constant',
-            # !! For learning_rate='factor' in Keras/PyBrain, implemented so
+            # !! For learning_rate='factor' in Keras, implemented so
             # very low is like 'constant'
             'learning_decay' : 0.000,
             # Only for Scikit-learn's 'learning_rate':'invscaling'
@@ -100,7 +91,6 @@ class NN_Compare:
             #  Consistent output  # (for developing and debugging)
             #######################
             # Doesn't work in Keras (there's a hack though -- see the imports)
-            # Doesn't work in PyBrain and no known hack :(
             'random_state' : 1,
 
             #######################################
@@ -133,26 +123,26 @@ class NN_Compare:
         self.supported_settings = {
             'activation' : {
                 'relu' : ['sklearn', 'sknn', 'keras'],
-                'linear' : ['sknn', 'pybrain', 'keras'],
-                'logistic' : ['sklearn', 'sknn', 'pybrain', 'keras'],
-                'tanh' : ['sklearn', 'sknn', 'pybrain', 'keras']
+                'linear' : ['sknn', 'keras'],
+                'logistic' : ['sklearn', 'sknn', 'keras'],
+                'tanh' : ['sklearn', 'sknn', 'keras']
             },
 
             'nesterovs_momentum' : {
                 True : ['sklearn', 'sknn', 'keras'],
-                False : ['sklearn', 'sknn', 'pybrain', 'keras']
+                False : ['sklearn', 'sknn', 'keras']
             },
 
             'algorithm' : {
-                'sgd' : ['sklearn', 'sknn', 'pybrain', 'keras'],
+                'sgd' : ['sklearn', 'sknn', 'keras'],
                 'adam' : ['sklearn', 'keras']
             },
 
             'learning_rate' : { # How the learning rate changes. Only sgd.
-                'constant' : ['sklearn', 'sknn', 'pybrain', 'keras'],
+                'constant' : ['sklearn', 'sknn', 'keras'],
                 'invscaling' : ['sklearn'],
                 'adapative' : ['sklearn'],
-                'factor' : ['keras', 'pybrain']
+                'factor' : ['keras']
             }
         }
 
@@ -177,7 +167,6 @@ class NN_Compare:
         nntypes = {
             'sklearn' : self.sklearn,
             'sknn'    : self.sknn,
-            'pybrain' : self.pybrain,
             'keras'   : self.keras
         }
 
@@ -193,7 +182,7 @@ class NN_Compare:
             X_train = normaliser.transform(X_train)
             X_test = normaliser.transform(X_test)
 
-            Y_test_predicted = nntypes[nntype](X_train, Y_train, X_test)
+            Y_test_predict, Y_test_predict_proba = nntypes[nntype](X_train, Y_train, X_test)
 
             # score = self.get_score(Y_test_predicted, Y_test)
             # F_score += score[0]/self.k_folds
@@ -201,7 +190,7 @@ class NN_Compare:
             break
 
         # return F_score, percent_score
-        return Y_test_predicted
+        return Y_test_predict, Y_test_predict_proba, Y_test
 
     def keras(self, X_train, Y_train, X_test):
 
@@ -213,18 +202,18 @@ class NN_Compare:
         try:
             activation = activation_dict[self.settings['activation']]
         except KeyError:
-            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in Keras."
-            raise NotImplementedError
+            err_str = "Activation function \"" + self.settings['activation']
+            err_str +=  "\" not supported in Keras."
+            raise NotImplementedError(err_str)
 
         if self.settings['learning_rate'] == 'factor':
             sgd_decay = self.settings['learning_decay']
         elif self.settings['learning_rate'] == 'constant':
             sgd_decay = 0.0
         else:
-            print "ERROR: Learning decay style \"" + self.settings['learning_rate'] + "\"",
-            print "not supported in Keras."
-            raise NotImplementedError
+            err_str = "Learning decay style \"" + self.settings['learning_rate']
+            err_str += "\" not supported in Keras."
+            raise NotImplementedError(err_str)
 
         if self.settings['dropout'] != 0.0:
             print "WARNING: I am not convinced that dropout is working correctly in Keras."
@@ -267,10 +256,11 @@ class NN_Compare:
                 epsilon=self.settings['epsilon']
             )
         else:
-            print "ERROR:", self.settings['algorithm'], "not implemented in Keras at present."
-            raise NotImplementedError
+            err_str = "Learning algorithm \"" + self.settings['algorithm']
+            err_str += "\" not implemented in Keras at present."
+            raise NotImplementedError(err_str)
 
-        keras_nn.compile(loss='categorical_crossentropy', optimizer=optimiser)
+        keras_nn.compile(loss='categorical_crossentropy', class_mode='binary', optimizer=optimiser)
 
         ##############
         #  Train NN  #
@@ -297,9 +287,10 @@ class NN_Compare:
 
         print loss
         print len(loss)
-        keras_predictions = keras_nn.predict_proba(X_test, verbose=0)
+        keras_predic_proba = keras_nn.predict_proba(X_test, verbose=0)
+        keras_predict = keras_nn.predict_classes(X_test, verbose=0)
 
-        return keras_predictions
+        return keras_predict, keras_predic_proba
 
     def sklearn(self, X_train, Y_train, X_test):
 
@@ -311,12 +302,11 @@ class NN_Compare:
         bad_settings = [self.settings[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
-            print "ERROR: The following settings which are unsupported by",
-            print "scikit-learn are currently not set to 0.0:"
+            err_str = "The following unsupported settings are not set to 0.0:\n"
             for i, key in enumerate(unsupported_keys):
                 if bad_settings[i]:
-                    print key + ":", self.settings[key]
-            raise NotImplementedError
+                    err_str += "\t" + key + ": " + str(self.settings[key]) + "\n"
+            raise NotImplementedError(err_str)
 
         valid_keys = [
             'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
@@ -354,8 +344,10 @@ class NN_Compare:
 
         print loss
         print len(loss)
-        Y_test_predicted = sklearn_nn.predict_proba(X_test)
-        return Y_test_predicted
+        Y_test_predict_proba = sklearn_nn.predict_proba(X_test)
+        Y_test_predict = sklearn_nn.predict(X_test)
+
+        return Y_test_predict, Y_test_predict_proba
 
     def sknn(self, X_train, Y_train, X_test):
 
@@ -367,9 +359,9 @@ class NN_Compare:
         try:
             activation = activation_dict[self.settings['activation']]
         except KeyError:
-            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in SKNN."
-            raise NotImplementedError
+            err_str = "Activation function \"" + self.settings['activation']
+            err_str += "\" not supported in SKNN."
+            raise NotImplementedError(err_str)
 
         if self.settings['algorithm'] == 'sgd':
             if self.settings['momentum'] == 0.0:
@@ -379,12 +371,10 @@ class NN_Compare:
             else:
                 learning_rule='momentum'
         else:
-            print "ERROR: Only SGD is implemented in Scikit-NN at present."
-            raise NotImplementedError
+            raise NotImplementedError("Only SGD is implemented in Scikit-NN at present.")
 
         if self.settings['learning_rate'] != 'constant':
-            print "ERROR: Learning decay not supported in SKNN (!)"
-            raise NotImplementedError
+            raise NotImplementedError("Learning decay not supported in SKNN (!)")
 
         if self.settings['alpha'] != 0.0:
             print "WARNING: I am not convinced that L2 is working in SKNN"
@@ -455,91 +445,6 @@ class NN_Compare:
         Y_test_predicted = sknn_nn.predict_proba(X_test)[:, 1::2]
 
         return Y_test_predicted
-
-    def pybrain(self, X_train, Y_train, X_test):
-
-        #########################
-        #  Settings conversion  #
-        #########################
-
-        activation_dict = {'linear': LinearLayer, 'logistic': SigmoidLayer, 'tanh': TanhLayer}
-        try:
-            hiddenLayerType = activation_dict[self.settings['activation']]
-        except KeyError:
-            print "ERROR: Activation function \"" + self.settings['activation'] + "\"",
-            print "not supported in PyBrain."
-            raise NotImplementedError
-
-        if self.settings['nesterovs_momentum'] == True:
-            print "ERROR: Nesterov's momentum is not supported in PyBrain."
-            raise NotImplementedError
-
-        if self.settings['algorithm'] != 'sgd':
-            print "ERROR: Only weight optimisation algorithm 'sgd' is",
-            print "supported in PyBrain."
-            raise NotImplementedError
-
-        if self.settings['learning_rate'] == 'factor':
-            # Unlike in Keras, 1.0 is off and 0.0 is maximum learning decay
-            # To keep 0.0 as off, we take 1.0 - learning_decay
-            sgd_decay = 1.0 - self.settings['learning_decay']
-        elif self.settings['learning_rate'] == 'constant':
-            sgd_decay = 1.0
-        else:
-            print "ERROR: Learning decay style \"" + self.settings['learning_rate'] + "\"",
-            print "not supported in PyBrain."
-            raise NotImplementedError
-
-        ###############
-        #  Create NN  #
-        ###############
-
-        nn = FeedForwardNetwork()
-
-        inLayer = LinearLayer(self.n_features)
-        hiddenLayer = hiddenLayerType(self.settings['hidden_layer_sizes'][0])
-        outLayer = SoftmaxLayer(self.n_outcomes)
-
-        nn.addInputModule(inLayer)
-        nn.addModule(hiddenLayer)
-        nn.addOutputModule(outLayer)
-
-        in_to_hidden = FullConnection(inLayer, hiddenLayer)
-        hidden_to_out = FullConnection(hiddenLayer, outLayer)
-
-        nn.addConnection(in_to_hidden)
-        nn.addConnection(hidden_to_out)
-        nn.sortModules()
-
-        train = ClassificationDataSet(inp=self.n_features, target=self.n_outcomes)
-        train.setField('input', X_train)
-        train.setField('target', Y_train)
-
-        test = ClassificationDataSet(inp=self.n_features, target=self.n_outcomes)
-        # NOTE using dummy Y_test var. Should work and seems to work.
-        Y_test = np.ones([X_test.shape[0], self.n_outcomes])
-        test.setField('input', X_test)
-        test.setField('target', Y_test)
-
-        if self.settings['algorithm'] == 'sgd':
-            trainer = BackpropTrainer(
-                nn,
-                learningrate=self.settings['learning_rate_init'],
-                weightdecay=self.settings['alpha'],
-                lrdecay=sgd_decay,
-                dataset=train,
-                momentum=self.settings['momentum'],
-                verbose=True,
-            )
-        else:
-            print "ERROR: Only SGD is implemented in PyBrain at present."
-            raise NotImplementedError
-
-        trainer.trainEpochs(2)
-
-        out = nn.activateOnDataset(test)
-
-        return out
 
     def get_score(self, predictions, answers):
         ''' Returns the F1 score and simple score (percent correct).
