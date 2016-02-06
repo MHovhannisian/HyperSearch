@@ -24,7 +24,6 @@ from keras.optimizers import SGD, Adam
 from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 
-np.random.seed(1)
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
         from disparate Python models on the same data and conveniently
@@ -48,11 +47,14 @@ class NN_Compare:
         self.n_outcomes = self.Y.shape[1]
         self.kfold_seed = 1
 
+        # Stores all tests which have been run, will contain a dict attributes
+        self.tests = []
+
         # Settings which are natively understood by scikit-learn are implemented
         # exactly as in the scikit-learn documentation:
         # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
         # Other settings have a comment starting with "# !!"
-        self.settings = {
+        self.nn_settings = {
             ##################
             #  Architecture  #
             ##################
@@ -97,15 +99,17 @@ class NN_Compare:
             #  Stopping criteria - DO NOT CHANGE  #
             #######################################
             # Stopping is handled manually by this class through the
-            # self.stopping_settings dict. This section is just to set up
+            # self.iter_settings dict. This section is just to set up
             # scikt-learn correctly. They are placed here for visiblity.
             'warm_start' : True,
             'max_iter' : 1, # In scikit-learn (and sknn), "iter" really means epoch.
         }
 
-        # Stopping conditions are homogenised through this dict.
-        # Note that these differ from sklearn's stopping criteria.
-        self.stopping_settings = {
+        # Iteration settings are homogenised through this dict.
+        # This includes stopping conditions and learning rate decay
+        # Each module runs for one epoch between the driver having control.
+        # Note that these override individual modules' stopping settings.
+        self.iter_settings = {
             # Epochs to run for if no convergence. Note that max iterations
             # are not specified but inferred from max_epoch and batch_size
             'max_epoch' : 3,
@@ -150,25 +154,34 @@ class NN_Compare:
         self.k_fold = KFold(self.n_samples, n_folds=k_folds, shuffle=True,
                             random_state=self.kfold_seed)
 
-    def get_settings(self):
-        return self.settings
+    def get_nn_settings(self):
+        return self.nn_settings
 
-    def set_settings(self, new_settings):
-        ''' Set the main neural network dict's settings '''
-        self.settings.update(new_settings)
+    def get_iter_settings(self):
+        return self.iter_settings
+
+    def set_nn_settings(self, new_settings):
+        ''' Set the neural network settings dict's settings '''
+        self.nn_settings.update(new_settings)
         return self
 
-    def set_stopping(self, new_settings):
-        ''' Set the stopping criterion dict's settings '''
-        self.stopping_settings.update(new_settings)
+    def set_iter_settings(self, new_settings):
+        ''' Set the iteration settings dict's settings '''
+        self.iter_settings.update(new_settings)
         return self
 
-    def run_test(self, nntype):
-        nntypes = {
+    def run_test(self, module):
+        modules = {
             'sklearn' : self.sklearn,
             'sknn'    : self.sknn,
             'keras'   : self.keras
         }
+
+        test = {'module': module,
+                'nn_settings': dict(self.nn_settings),
+                'iter_settings': dict(self.iter_settings)
+                }
+
 
         F_score = 0.0
         percent_score = 0.0
@@ -182,15 +195,22 @@ class NN_Compare:
             X_train = normaliser.transform(X_train)
             X_test = normaliser.transform(X_test)
 
-            Y_test_predict, Y_test_predict_proba = nntypes[nntype](X_train, Y_train, X_test)
+            predict_proba, loss_curve, valid_curve, model = modules[module](X_train, Y_train, X_test)
+            test['predict_proba'] = predict_proba
+            test['loss_curve'] = loss_curve
+            test['valid_curve'] = valid_curve
+            test['model'] = model
 
             # score = self.get_score(Y_test_predicted, Y_test)
             # F_score += score[0]/self.k_folds
             # percent_score += score[1]/self.k_folds
             break
 
+        self.tests.append(test)
+
         # return F_score, percent_score
-        return Y_test_predict, Y_test_predict_proba, Y_test
+        # return Y_test_predict, Y_test_predict_proba, Y_test, model, X_test
+        return test['predict_proba']
 
     def keras(self, X_train, Y_train, X_test):
 
@@ -200,22 +220,22 @@ class NN_Compare:
 
         activation_dict = {'relu': 'relu', 'linear': 'linear', 'logistic': 'sigmoid', 'tanh': 'tanh'}
         try:
-            activation = activation_dict[self.settings['activation']]
+            activation = activation_dict[self.nn_settings['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self.settings['activation']
+            err_str = "Activation function \"" + self.nn_settings['activation']
             err_str +=  "\" not supported in Keras."
             raise NotImplementedError(err_str)
 
-        if self.settings['learning_rate'] == 'factor':
-            sgd_decay = self.settings['learning_decay']
-        elif self.settings['learning_rate'] == 'constant':
+        if self.nn_settings['learning_rate'] == 'factor':
+            sgd_decay = self.nn_settings['learning_decay']
+        elif self.nn_settings['learning_rate'] == 'constant':
             sgd_decay = 0.0
         else:
-            err_str = "Learning decay style \"" + self.settings['learning_rate']
+            err_str = "Learning decay style \"" + self.nn_settings['learning_rate']
             err_str += "\" not supported in Keras."
             raise NotImplementedError(err_str)
 
-        if self.settings['dropout'] != 0.0:
+        if self.nn_settings['dropout'] != 0.0:
             print "WARNING: I am not convinced that dropout is working correctly in Keras."
 
         ###############
@@ -225,38 +245,38 @@ class NN_Compare:
         keras_nn = Sequential()
 
         keras_nn.add(Dense(
-            self.settings['hidden_layer_sizes'][0],
+            self.nn_settings['hidden_layer_sizes'][0],
             input_dim=self.n_features,
             init='lecun_uniform',
-            W_regularizer=l2(self.settings['alpha']),
+            W_regularizer=l2(self.nn_settings['alpha']),
             activation=activation)
         )
 
-        keras_nn.add(Dropout(self.settings['dropout']))
+        keras_nn.add(Dropout(self.nn_settings['dropout']))
 
         keras_nn.add(Dense(
             self.n_outcomes,
             init='lecun_uniform',
-            W_regularizer=l2(self.settings['alpha']),
+            W_regularizer=l2(self.nn_settings['alpha']),
             activation='softmax')
         )
 
-        if self.settings['algorithm'] == 'sgd':
+        if self.nn_settings['algorithm'] == 'sgd':
             optimiser = SGD(
-                lr=self.settings['learning_rate_init'],
+                lr=self.nn_settings['learning_rate_init'],
                 decay=sgd_decay,
-                momentum=self.settings['momentum'],
-                nesterov=self.settings['nesterovs_momentum'],
+                momentum=self.nn_settings['momentum'],
+                nesterov=self.nn_settings['nesterovs_momentum'],
             )
-        elif self.settings['algorithm'] == 'adam':
+        elif self.nn_settings['algorithm'] == 'adam':
             optimiser = Adam(
-                lr=self.settings['learning_rate_init'],
-                beta_1=self.settings['beta_1'],
-                beta_2=self.settings['beta_2'],
-                epsilon=self.settings['epsilon']
+                lr=self.nn_settings['learning_rate_init'],
+                beta_1=self.nn_settings['beta_1'],
+                beta_2=self.nn_settings['beta_2'],
+                epsilon=self.nn_settings['epsilon']
             )
         else:
-            err_str = "Learning algorithm \"" + self.settings['algorithm']
+            err_str = "Learning algorithm \"" + self.nn_settings['algorithm']
             err_str += "\" not implemented in Keras at present."
             raise NotImplementedError(err_str)
 
@@ -266,31 +286,29 @@ class NN_Compare:
         #  Train NN  #
         ##############
 
-        loss = []
+        loss_curve = []
+        valid_curve = []
         n_loss = [0]
         stop_reason = 0
 
-        for i in range(self.stopping_settings['max_epoch']):
+        for i in range(self.iter_settings['max_epoch']):
             history = keras_nn.fit(
                 X_train, Y_train,
                 nb_epoch=1,
-                batch_size=self.settings['batch_size'],
+                batch_size=self.nn_settings['batch_size'],
                 verbose=0,
             )
 
-            loss.append(history.history['loss'][0])
+            loss_curve.append(history.history['loss'][0])
 
-            # Use change in loss to evaluate stability
-            if self.converged(loss, n_loss):
+            # Use change in loss_curve to evaluate stability
+            if self.converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-        print loss
-        print len(loss)
-        keras_predic_proba = keras_nn.predict_proba(X_test, verbose=0)
-        keras_predict = keras_nn.predict_classes(X_test, verbose=0)
+        keras_predict_proba = keras_nn.predict_proba(X_test, verbose=0)
 
-        return keras_predict, keras_predic_proba
+        return keras_predict_proba, loss_curve, valid_curve, keras_nn
 
     def sklearn(self, X_train, Y_train, X_test):
 
@@ -299,13 +317,13 @@ class NN_Compare:
         #####################################################
 
         unsupported_keys = ['dropout', 'learning_decay']
-        bad_settings = [self.settings[key] > 0 for key in unsupported_keys]
+        bad_settings = [self.nn_settings[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
             err_str = "The following unsupported settings are not set to 0.0:\n"
             for i, key in enumerate(unsupported_keys):
                 if bad_settings[i]:
-                    err_str += "\t" + key + ": " + str(self.settings[key]) + "\n"
+                    err_str += "\t" + key + ": " + str(self.nn_settings[key]) + "\n"
             raise NotImplementedError(err_str)
 
         valid_keys = [
@@ -316,7 +334,7 @@ class NN_Compare:
             'validation_fraction', 'beta_1', 'beta_2', 'epsilon', 'algorithm'
         ]
 
-        sklearn_settings = {key: val for key, val in self.settings.items() if key in valid_keys}
+        sklearn_settings = {key: val for key, val in self.nn_settings.items() if key in valid_keys}
 
         ###############
         #  Create NN  #
@@ -329,25 +347,25 @@ class NN_Compare:
         #  Train NN  #
         ##############
 
-        loss = []
+        loss_curve = []
         n_loss = [0]
         stop_reason = 0
+        valid_curve = []
 
-        for i in range(self.stopping_settings['max_epoch']):
+        for i in range(self.iter_settings['max_epoch']):
             sklearn_nn.fit(X_train, Y_train)
-            loss = sklearn_nn.loss_curve_ # sklearn itself keeps a list across fits
+            loss_curve = sklearn_nn.loss_curve_ # sklearn itself keeps a list across fits
 
-            # Use change in loss to evaluate stability
-            if self.converged(loss, n_loss):
+            # Use change in loss_curve to evaluate stability
+            if self.converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-        print loss
-        print len(loss)
-        Y_test_predict_proba = sklearn_nn.predict_proba(X_test)
-        Y_test_predict = sklearn_nn.predict(X_test)
+        print loss_curve
+        print len(loss_curve)
+        predict_proba = sklearn_nn.predict_proba(X_test)
 
-        return Y_test_predict, Y_test_predict_proba
+        return predict_proba, loss_curve, valid_curve, sklearn_nn
 
     def sknn(self, X_train, Y_train, X_test):
 
@@ -357,26 +375,26 @@ class NN_Compare:
 
         activation_dict = {'relu': 'Rectifier', 'linear': 'Linear', 'logistic': 'Sigmoid', 'tanh': 'Tanh'}
         try:
-            activation = activation_dict[self.settings['activation']]
+            activation = activation_dict[self.nn_settings['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self.settings['activation']
+            err_str = "Activation function \"" + self.nn_settings['activation']
             err_str += "\" not supported in SKNN."
             raise NotImplementedError(err_str)
 
-        if self.settings['algorithm'] == 'sgd':
-            if self.settings['momentum'] == 0.0:
+        if self.nn_settings['algorithm'] == 'sgd':
+            if self.nn_settings['momentum'] == 0.0:
                 learning_rule='sgd'
-            elif self.settings['nesterovs_momentum'] == True:
+            elif self.nn_settings['nesterovs_momentum'] == True:
                 learning_rule='nesterov'
             else:
                 learning_rule='momentum'
         else:
             raise NotImplementedError("Only SGD is implemented in Scikit-NN at present.")
 
-        if self.settings['learning_rate'] != 'constant':
+        if self.nn_settings['learning_rate'] != 'constant':
             raise NotImplementedError("Learning decay not supported in SKNN (!)")
 
-        if self.settings['alpha'] != 0.0:
+        if self.nn_settings['alpha'] != 0.0:
             print "WARNING: I am not convinced that L2 is working in SKNN"
             print "Dropout works, though."
 
@@ -394,27 +412,27 @@ class NN_Compare:
         sknn_nn = sknn_MLPClassifier(
 
             # sknn_nn architecture
-            layers=[Layer(activation, units=self.settings['hidden_layer_sizes'][0],),
+            layers=[Layer(activation, units=self.nn_settings['hidden_layer_sizes'][0],),
                     Layer("Softmax", units=2*self.n_outcomes)],
 
             # Learning settings
             loss_type='mcc',
-            learning_rate=self.settings['learning_rate_init'],
+            learning_rate=self.nn_settings['learning_rate_init'],
             learning_rule=learning_rule,
-            learning_momentum=self.settings['momentum'],
-            batch_size=self.settings['batch_size'],
+            learning_momentum=self.nn_settings['momentum'],
+            batch_size=self.nn_settings['batch_size'],
             n_iter=1,
 
             # Regularisation
-            weight_decay=self.settings['alpha'],
-            dropout_rate=self.settings['dropout'],
+            weight_decay=self.nn_settings['alpha'],
+            dropout_rate=self.nn_settings['dropout'],
 
-            random_state=self.settings['random_state'],
+            random_state=self.nn_settings['random_state'],
 
             # Callback to get loss
             callback = {'on_batch_finish': batch_callback},
 
-            verbose=1
+            # verbose=1
         )
 
         print sknn_nn
@@ -423,28 +441,29 @@ class NN_Compare:
         #  Train NN  #
         ##############
 
-        loss = []
+        loss_curve = []
         n_loss = [0]
         stop_reason = 0
+        valid_curve = []
 
-        for i in range(self.stopping_settings['max_epoch']):
+        for i in range(self.iter_settings['max_epoch']):
             sknn_nn.fit(X_train, Y_train)
-            loss.append(batch_loss[0])
+            loss_curve.append(batch_loss[0])
 
-            # Use change in loss to evaluate stability
-            if self.converged(loss, n_loss):
+            # Use change in loss_curve to evaluate stability
+            if self.converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
         print X_train.shape
-        print loss
-        print len(loss)
+        print loss_curve
+        print len(loss_curve)
 
         # NOTE: predict_proba returns 2 entries per binary class, which are
         # True and False and add to give 1.0. We take the probability of True.
-        Y_test_predicted = sknn_nn.predict_proba(X_test)[:, 1::2]
+        predict_proba = sknn_nn.predict_proba(X_test)[:, 1::2]
 
-        return Y_test_predicted
+        return predict_proba, loss_curve, valid_curve, sknn_nn
 
     def get_score(self, predictions, answers):
         ''' Returns the F1 score and simple score (percent correct).
@@ -483,12 +502,12 @@ class NN_Compare:
         except IndexError:
             return False
 
-        if loss_ratio < self.stopping_settings['epoch_tol']:
+        if loss_ratio < self.iter_settings['epoch_tol']:
             n_loss[0] += 1
         else:
             n_loss[0] = 0
 
-        if n_loss[0] == self.stopping_settings['n_stable']:
+        if n_loss[0] == self.iter_settings['n_stable']:
             return True
         else:
             return False
