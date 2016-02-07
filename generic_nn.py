@@ -7,7 +7,7 @@ network implementations and architectures, united through a common interface.
 This interface is modelled on the scikit-learn interface.
 '''
 
-from sklearn.cross_validation import KFold
+from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
 
 from sklearn.neural_network import MLPClassifier as sklearn_MLPClassifier
@@ -27,6 +27,7 @@ from keras.callbacks import LearningRateScheduler
 
 import warnings
 
+
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
         from disparate Python models on the same data and conveniently
@@ -35,20 +36,27 @@ class NN_Compare:
         Works with 1 hidden layer for now.
     '''
 
-    def __init__(self, X, Y, k_folds=4):
-        self.X = np.array(X).astype('float64')
-        self.Y = np.array(Y).astype(bool)
+    def __init__(self, X, Y, split=(0.7,0.15,0.15)):
+        ''' Initialisaton tasks:
+        - Split and store data as train, validate, and test.
+        - Set default values for neural networks.
 
-        try:
-            assert(self.X.shape[0] == self.Y.shape[0])
-        except AssertionError:
-            print "ERROR: Number of samples differs between X and Y!"
-            exit()
+        Inputs:
+        X - features of dataset
+        Y - correct labels of dataset
+        split - 3-value tuple of the train/validate/test split
 
-        self.n_samples = self.Y.shape[0]
-        self.n_features = self.X.shape[1]
-        self.n_outcomes = self.Y.shape[1]
-        self.kfold_seed = 1
+        Returns:
+        self
+        '''
+
+        # Normalise inputs and split data
+        self.X_train, self.X_validate, self.X_test, self.Y_train, self.Y_validate, self.Y_test = \
+            self.prepare_data(X, Y, split)
+
+        #self.n_samples = self.Y.shape[0]
+        self.n_features = X.shape[1]
+        self.n_outcomes = Y.shape[1]
 
         # Stores all tests which have been run, will contain a dict attributes
         self.tests = []
@@ -150,9 +158,40 @@ class NN_Compare:
 
         self._validate_settings()
 
-        self.k_folds = k_folds
-        self.k_fold = KFold(self.n_samples, n_folds=k_folds, shuffle=True,
-                            random_state=self.kfold_seed)
+    @staticmethod
+    def prepare_data(X, Y, split):
+        X = np.array(X).astype('float64')
+        Y = np.array(Y).astype(bool)
+
+        try:
+            assert(sum(split) == 1.0)
+        except AssertionError:
+            raise AssertionError("Suggested data split doesn't sum to 1.0")
+
+        try:
+            assert(X.shape[0] == Y.shape[0])
+        except AssertionError:
+            raise AssertionError("Number of samples differs between X and Y!")
+
+        split_randint = 0
+
+        X_train, X, Y_train, Y = train_test_split(
+            X, Y, test_size=split[1]+split[2], random_state=split_randint)
+
+        X_validate, X_test, Y_validate, Y_test =\
+            train_test_split(
+                    X, Y,
+                    test_size=split[2]/(split[1]+split[2]),
+                    random_state=split_randint
+            )
+
+        # Train the normaliser on training data only
+        normaliser = preprocessing.StandardScaler().fit(X_train)
+        X_train = normaliser.transform(X_train)
+        X_validate = normaliser.transform(X_validate)
+        X_test = normaliser.transform(X_test)
+
+        return X_train, X_validate, X_test, Y_train, Y_validate, Y_test
 
     def _validate_settings(self):
         ''' Some basic compatibility checks between settings. Doesn't check
@@ -190,42 +229,26 @@ class NN_Compare:
             'keras': self.keras
         }
 
-        test = {'module': module,
-                'nn_settings': dict(self.nn_settings),
-                'iter_settings': dict(self.iter_settings)
-                }
+        test = {
+            'module': module,
+            'nn_settings': dict(self.nn_settings),
+            'iter_settings': dict(self.iter_settings)
+        }
 
         F_score = 0.0
         percent_score = 0.0
 
-        for train_idx, test_idx in self.k_fold:
-            X_train, X_test = self.X[train_idx], self.X[test_idx]
-            Y_train, Y_test = self.Y[train_idx], self.Y[test_idx]
-
-            # Train the normaliser on training data only (to not cheat)
-            normaliser = preprocessing.StandardScaler().fit(X_train)
-            X_train = normaliser.transform(X_train)
-            X_test = normaliser.transform(X_test)
-
-            predict_proba, loss_curve, valid_curve, model = modules[
-                module](X_train, Y_train, X_test)
-            test['predict_proba'] = predict_proba
-            test['loss_curve'] = loss_curve
-            test['valid_curve'] = valid_curve
-            test['model'] = model
-
-            # score = self.get_score(Y_test_predicted, Y_test)
-            # F_score += score[0]/self.k_folds
-            # percent_score += score[1]/self.k_folds
-            break
+        predict_proba, loss_curve, valid_curve, model = modules[module]()
+        test['predict_proba'] = predict_proba
+        test['loss_curve'] = loss_curve
+        test['valid_curve'] = valid_curve
+        test['model'] = model
 
         self.tests.append(test)
 
-        # return F_score, percent_score
-        # return Y_test_predict, Y_test_predict_proba, Y_test, model, X_test
         return test['predict_proba']
 
-    def keras(self, X_train, Y_train, X_test):
+    def keras(self):
 
         #########################
         #  Settings conversion  #
@@ -241,15 +264,16 @@ class NN_Compare:
             raise NotImplementedError(err_str)
 
         if self.nn_settings['dropout'] != 0.0:
-            warnings.warn("I am not convinced that dropout is working correctly in Keras.")
+            warnings.warn(
+                "I am not convinced that dropout is working correctly in Keras.")
 
         # Callback for SGD learning rate decline
         n_epoch = [0]
+
         def learning_schedule(epoch):
             init = self.nn_settings['learning_rate_init']
             factor = (1 - self.iter_settings['learning_decay'])**n_epoch[0]
-            n_epoch[0] += 1
-            lr = factor*init
+            lr = factor * init
             return lr
 
         ###############
@@ -272,7 +296,7 @@ class NN_Compare:
             self.n_outcomes,
             init='lecun_uniform',
             W_regularizer=l2(self.nn_settings['alpha']),
-            activation='softmax')
+            activation='sigmoid')
         )
 
         if self.nn_settings['algorithm'] == 'sgd':
@@ -289,13 +313,14 @@ class NN_Compare:
                 beta_2=self.nn_settings['beta_2'],
                 epsilon=self.nn_settings['epsilon']
             )
+        elif self.nn_settings['algorithm'] == 'adadelta':
+            optimiser = Adadelta()  # Recommended to use the default values
         else:
             err_str = "Learning algorithm \"" + self.nn_settings['algorithm']
             err_str += "\" not implemented in Keras at present."
             raise NotImplementedError(err_str)
 
-        keras_nn.compile(loss='categorical_crossentropy',
-                         class_mode='binary', optimizer=optimiser)
+        keras_nn.compile(loss='binary_crossentropy', optimizer=optimiser)
 
         ##############
         #  Train NN  #
@@ -306,10 +331,11 @@ class NN_Compare:
         n_loss = [0]
         stop_reason = 0
 
-
         for i in range(self.iter_settings['max_epoch']):
+            n_epoch[0] = i
+
             history = keras_nn.fit(
-                X_train, Y_train,
+                self.X_train, self.Y_train,
                 nb_epoch=1,
                 batch_size=self.nn_settings['batch_size'],
                 verbose=0,
@@ -323,13 +349,13 @@ class NN_Compare:
                 stop_reason = 1
                 break
 
-        keras_predict_proba = keras_nn.predict_proba(X_test, verbose=0)
+        keras_predict_proba = keras_nn.predict_proba(self.X_test, verbose=0)
 
         print loss_curve
         print len(loss_curve)
         return keras_predict_proba, loss_curve, valid_curve, keras_nn
 
-    def sklearn(self, X_train, Y_train, X_test):
+    def sklearn(self):
 
         #####################################################
         #  Strip settings that are unrecognised by sklearn  #
@@ -377,7 +403,7 @@ class NN_Compare:
         learning_rate = self.nn_settings['learning_rate_init']
 
         for i in range(self.iter_settings['max_epoch']):
-            sklearn_nn.fit(X_train, Y_train)
+            sklearn_nn.fit(self.X_train, self.Y_train)
             loss_curve = sklearn_nn.loss_curve_  # sklearn itself keeps a list across fits
 
             learning_rate *= (1.0 - self.iter_settings['learning_decay'])
@@ -390,11 +416,11 @@ class NN_Compare:
 
         print loss_curve
         print len(loss_curve)
-        predict_proba = sklearn_nn.predict_proba(X_test)
+        predict_proba = sklearn_nn.predict_proba(self.X_test)
 
         return predict_proba, loss_curve, valid_curve, sklearn_nn
 
-    def sknn(self, X_train, Y_train, X_test):
+    def sknn(self):
 
         #########################
         #  Settings conversion  #
@@ -412,19 +438,23 @@ class NN_Compare:
         if self.nn_settings['algorithm'] == 'sgd':
             if self.nn_settings['momentum'] == 0.0:
                 learning_rule = 'sgd'
-            elif self.nn_settings['nesterovs_momentum'] == True:
+            elif self.nn_settings['nesterovs_momentum'] is True:
                 learning_rule = 'nesterov'
             else:
                 learning_rule = 'momentum'
+        elif self.nn_settings['algorithm'] == 'adadelta':
+            learning_rule = 'adadelta'
         else:
             raise NotImplementedError(
-                "Only SGD is implemented in Scikit-NN at present.")
+                "Only SGD and Adadelta implemented in Scikit-NN at present.")
 
         if self.iter_settings['learning_decay'] != 0.0:
-            raise NotImplementedError("SGD learning decay not supported in SKNN (!)")
+            raise NotImplementedError(
+                "SGD learning decay not supported in SKNN (!)")
 
         if self.nn_settings['alpha'] != 0.0:
-            warnings.warn("I am not convinced that L2 is working correctly in SKNN.")
+            warnings.warn(
+                "I am not convinced that L2 is working correctly in SKNN.")
 
         # The contents of a mutable variable can be changed in a closure.
         # SKNN doesn't give access to the loss in the end-of-epoch callback,
@@ -476,7 +506,7 @@ class NN_Compare:
         valid_curve = []
 
         for i in range(self.iter_settings['max_epoch']):
-            sknn_nn.fit(X_train, Y_train)
+            sknn_nn.fit(self.X_train, self.Y_train)
             loss_curve.append(batch_loss[0])
 
             # Use change in loss_curve to evaluate stability
@@ -484,13 +514,13 @@ class NN_Compare:
                 stop_reason = 1
                 break
 
-        print X_train.shape
+        print self.X_train.shape
         print loss_curve
         print len(loss_curve)
 
         # NOTE: predict_proba returns 2 entries per binary class, which are
         # True and False and add to give 1.0. We take the probability of True.
-        predict_proba = sknn_nn.predict_proba(X_test)[:, 1::2]
+        predict_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
 
         return predict_proba, loss_curve, valid_curve, sknn_nn
 
