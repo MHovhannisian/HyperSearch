@@ -23,7 +23,9 @@ from keras.layers.core import Dense, Dropout, Activation
 from keras.optimizers import SGD, Adam, Adadelta
 from keras.utils.visualize_util import plot
 from keras.regularizers import l2
+from keras.callbacks import LearningRateScheduler
 
+import warnings
 
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
@@ -239,7 +241,16 @@ class NN_Compare:
             raise NotImplementedError(err_str)
 
         if self.nn_settings['dropout'] != 0.0:
-            print "WARNING: I am not convinced that dropout is working correctly in Keras."
+            warnings.warn("I am not convinced that dropout is working correctly in Keras.")
+
+        # Callback for SGD learning rate decline
+        n_epoch = [0]
+        def learning_schedule(epoch):
+            init = self.nn_settings['learning_rate_init']
+            factor = (1 - self.iter_settings['learning_decay'])**n_epoch[0]
+            n_epoch[0] += 1
+            lr = factor*init
+            return lr
 
         ###############
         #  Create NN  #
@@ -295,12 +306,14 @@ class NN_Compare:
         n_loss = [0]
         stop_reason = 0
 
+
         for i in range(self.iter_settings['max_epoch']):
             history = keras_nn.fit(
                 X_train, Y_train,
                 nb_epoch=1,
                 batch_size=self.nn_settings['batch_size'],
                 verbose=0,
+                callbacks=[LearningRateScheduler(learning_schedule)]
             )
 
             loss_curve.append(history.history['loss'][0])
@@ -312,6 +325,8 @@ class NN_Compare:
 
         keras_predict_proba = keras_nn.predict_proba(X_test, verbose=0)
 
+        print loss_curve
+        print len(loss_curve)
         return keras_predict_proba, loss_curve, valid_curve, keras_nn
 
     def sklearn(self, X_train, Y_train, X_test):
@@ -405,9 +420,11 @@ class NN_Compare:
             raise NotImplementedError(
                 "Only SGD is implemented in Scikit-NN at present.")
 
+        if self.iter_settings['learning_decay'] != 0.0:
+            raise NotImplementedError("SGD learning decay not supported in SKNN (!)")
+
         if self.nn_settings['alpha'] != 0.0:
-            print "WARNING: I am not convinced that L2 is working in SKNN"
-            print "Dropout works, though."
+            warnings.warn("I am not convinced that L2 is working correctly in SKNN.")
 
         # The contents of a mutable variable can be changed in a closure.
         # SKNN doesn't give access to the loss in the end-of-epoch callback,
