@@ -7,6 +7,9 @@ network implementations and architectures, united through a common interface.
 This interface is modelled on the scikit-learn interface.
 '''
 
+import warnings
+import math
+
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
 
@@ -25,8 +28,6 @@ from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler
 
-import warnings
-
 
 class NN_Compare:
     ''' Class allows training and testing multiple neural network architectures
@@ -36,10 +37,10 @@ class NN_Compare:
         Works with 1 hidden layer for now.
     '''
 
-    def __init__(self, X, Y, split=(0.7,0.15,0.15)):
+    def __init__(self, X, Y, split=(0.75, 0.10, 0.15)):
         ''' Initialisaton tasks:
-        - Split and store data as train, validate, and test.
-        - Set default values for neural networks.
+        - Split and store data as self.{train, validate, test}
+        - Set default values for neural networks
 
         Inputs:
         X - features of dataset
@@ -52,9 +53,8 @@ class NN_Compare:
 
         # Normalise inputs and split data
         self.X_train, self.X_validate, self.X_test, self.Y_train, self.Y_validate, self.Y_test = \
-            self.prepare_data(X, Y, split)
+            self._prepare_data(X, Y, split)
 
-        #self.n_samples = self.Y.shape[0]
         self.n_features = X.shape[1]
         self.n_outcomes = Y.shape[1]
 
@@ -131,6 +131,10 @@ class NN_Compare:
             # TODO NOTIMPLEMENTEDYET
             # only implemented in sklearn
             'learning_decay': 0.000,
+
+            # Terminate before the loss stops improving if the accuracy score
+            # on the validation stops improving. Uses epoch_tol and n_stable.
+            'early_stopping': True,
         }
 
         # For settings which take a categorical value, provided is a dict of
@@ -159,7 +163,7 @@ class NN_Compare:
         self._validate_settings()
 
     @staticmethod
-    def prepare_data(X, Y, split):
+    def _prepare_data(X, Y, split):
         X = np.array(X).astype('float64')
         Y = np.array(Y).astype(bool)
 
@@ -238,15 +242,15 @@ class NN_Compare:
         F_score = 0.0
         percent_score = 0.0
 
-        predict_proba, loss_curve, valid_curve, model = modules[module]()
-        test['predict_proba'] = predict_proba
+        score, loss_curve, valid_curve, model = modules[module]()
         test['loss_curve'] = loss_curve
         test['valid_curve'] = valid_curve
         test['model'] = model
+        test['score'] = score
 
         self.tests.append(test)
 
-        return test['predict_proba']
+        return test
 
     def keras(self):
 
@@ -329,6 +333,7 @@ class NN_Compare:
         loss_curve = []
         valid_curve = []
         n_loss = [0]
+        n_valid = [0]
         stop_reason = 0
 
         for i in range(self.iter_settings['max_epoch']):
@@ -336,24 +341,44 @@ class NN_Compare:
 
             history = keras_nn.fit(
                 self.X_train, self.Y_train,
-                nb_epoch=1,
+                nb_epoch=10,
                 batch_size=self.nn_settings['batch_size'],
                 verbose=0,
                 callbacks=[LearningRateScheduler(learning_schedule)]
             )
 
+            ####################
+            #  Track progress  #
+            ####################
+
             loss_curve.append(history.history['loss'][0])
 
-            # Use change in loss_curve to evaluate stability
-            if self.converged(loss_curve, n_loss):
+            valid_proba = keras_nn.predict_proba(self.X_validate, verbose=0)
+            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
+            valid_curve.append(valid_score)
+
+            #############################
+            #  Check stopping criteria  #
+            #############################
+
+            if self._converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-        keras_predict_proba = keras_nn.predict_proba(self.X_test, verbose=0)
+            if self.iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+                stop_reason = 2
+                break
 
-        print loss_curve
-        print len(loss_curve)
-        return keras_predict_proba, loss_curve, valid_curve, keras_nn
+        test_proba = keras_nn.predict_proba(self.X_test, verbose=0)
+        score = self.score_from_proba(test_proba, self.Y_test)
+
+        return score, loss_curve, valid_curve, keras_nn
+
+    @staticmethod
+    def score_from_proba(proba, Y):
+        predictions = (proba > 0.5)
+        score = (predictions == Y).mean()
+        return score
 
     def sklearn(self):
 
@@ -376,8 +401,8 @@ class NN_Compare:
             'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
             'learning_rate', 'max_iter', 'random_state', 'shuffle', 'tol',
             'learning_rate_init', 'power_t', 'verbose', 'warm_start',
-            'momentum', 'nesterovs_momentum', 'early_stopping',
-            'validation_fraction', 'beta_1', 'beta_2', 'epsilon', 'algorithm'
+            'momentum', 'nesterovs_momentum', 'validation_fraction',
+            'beta_1', 'beta_2', 'epsilon', 'algorithm'
         ]
 
         sklearn_settings = {key: val for key, val in self.nn_settings.items()
@@ -396,9 +421,10 @@ class NN_Compare:
 
         # Tracking for stopping criteria and output
         loss_curve = []
-        n_loss = [0]
-        stop_reason = 0
         valid_curve = []
+        n_loss = [0]
+        n_valid = [0]
+        stop_reason = 0
 
         learning_rate = self.nn_settings['learning_rate_init']
 
@@ -409,16 +435,26 @@ class NN_Compare:
             learning_rate *= (1.0 - self.iter_settings['learning_decay'])
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
-            # Use change in loss_curve to evaluate stability
-            if self.converged(loss_curve, n_loss):
+            valid_proba = sklearn_nn.predict_proba(self.X_validate)
+            valid_score = self.score_from_proba(valid_proba*3, self.Y_validate)
+            valid_curve.append(valid_score)
+
+            #############################
+            #  Check stopping criteria  #
+            #############################
+
+            if self._converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-        print loss_curve
-        print len(loss_curve)
-        predict_proba = sklearn_nn.predict_proba(self.X_test)
+            if self.iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+                stop_reason = 2
+                break
 
-        return predict_proba, loss_curve, valid_curve, sklearn_nn
+        test_proba = sklearn_nn.predict_proba(self.X_test)
+        score = self.score_from_proba(test_proba, self.Y_test)
+
+        return score, loss_curve, valid_curve, sklearn_nn
 
     def sknn(self):
 
@@ -501,28 +537,34 @@ class NN_Compare:
         ##############
 
         loss_curve = []
-        n_loss = [0]
-        stop_reason = 0
         valid_curve = []
+        n_loss = [0]
+        n_valid = [0]
+        stop_reason = 0
 
         for i in range(self.iter_settings['max_epoch']):
             sknn_nn.fit(self.X_train, self.Y_train)
             loss_curve.append(batch_loss[0])
 
+            # NOTE: predict_proba returns 2 entries per binary class, which are
+            # True and False and add to give 1.0. We take the probability of True.
+            valid_proba = sknn_nn.predict_proba(self.X_validate)[:, 1::2]
+            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
+            valid_curve.append(valid_score)
+
             # Use change in loss_curve to evaluate stability
-            if self.converged(loss_curve, n_loss):
+            if self._converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-        print self.X_train.shape
-        print loss_curve
-        print len(loss_curve)
+            if self.iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+                stop_reason = 2
+                break
 
-        # NOTE: predict_proba returns 2 entries per binary class, which are
-        # True and False and add to give 1.0. We take the probability of True.
         predict_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
+        score = self.score_from_proba(predict_proba, self.Y_test)
 
-        return predict_proba, loss_curve, valid_curve, sknn_nn
+        return score, loss_curve, valid_curve, sknn_nn
 
     def get_score(self, predictions, answers):
         ''' Returns the F1 score and simple score (percent correct).
@@ -543,31 +585,31 @@ class NN_Compare:
 
         return F1, score
 
-    def converged(self, loss, n_loss):
+    def _converged(self, objective, n_objective):
         ''' Inputs:
 
-            loss: Loss at end of each epoch until now
-            n_loss: Length of previous stability streak
+            objective: Loss or validation score at end of each epoch until now
+            n_objective: Length of previous stability streak
 
             Returns:
 
             True if converged according to settings
             False if not converged according to settings
 
-            Updates n_loss as a side-effect.
+            Updates n_objective as a side-effect.
         '''
 
         try:
-            loss_ratio = 1 - (loss[-1] / loss[-2])
+            objective_ratio = math.fabs(1 - (objective[-1] / objective[-2]))
         except IndexError:
             return False
 
-        if loss_ratio < self.iter_settings['epoch_tol']:
-            n_loss[0] += 1
+        if objective_ratio < self.iter_settings['epoch_tol']:
+            n_objective[0] += 1
         else:
-            n_loss[0] = 0
+            n_objective[0] = 0
 
-        if n_loss[0] == self.iter_settings['n_stable']:
+        if n_objective[0] == self.iter_settings['n_stable']:
             return True
         else:
             return False
