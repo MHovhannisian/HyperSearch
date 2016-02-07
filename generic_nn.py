@@ -20,7 +20,7 @@ np.random.seed(1)
 
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
-from keras.optimizers import SGD, Adam
+from keras.optimizers import SGD, Adam, Adadelta
 from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 
@@ -77,12 +77,6 @@ class NN_Compare:
             # SGD only
             'momentum' : 0.9,
             'nesterovs_momentum' : False,
-            'learning_rate' : 'constant',
-            # !! For learning_rate='factor' in Keras, implemented so
-            # very low is like 'constant'
-            'learning_decay' : 0.000,
-            # Only for Scikit-learn's 'learning_rate':'invscaling'
-            'power_t' : 0.5,
 
             # Adam only (Scikit-learn and Keras only)
             'beta_1' : 0.9,
@@ -95,14 +89,14 @@ class NN_Compare:
             # Doesn't work in Keras (there's a hack though -- see the imports)
             'random_state' : 1,
 
-            #######################################
-            #  Stopping criteria - DO NOT CHANGE  #
-            #######################################
-            # Stopping is handled manually by this class through the
-            # self.iter_settings dict. This section is just to set up
-            # scikt-learn correctly. They are placed here for visiblity.
+            ###############################################
+            #  Iterations/epoch settings - DO NOT CHANGE  #
+            ###############################################
+            # Training iteration is handled manually by this class through the
+            # self.iter_settings dict.
             'warm_start' : True,
             'max_iter' : 1, # In scikit-learn (and sknn), "iter" really means epoch.
+            'learning_rate' : 'constant',
         }
 
         # Iteration settings are homogenised through this dict.
@@ -119,6 +113,11 @@ class NN_Compare:
 
             # Number of consecutive epochs considered converged before stopping.
             'n_stable' : 3,
+
+            # For SGD, decay in learning rate between epochs. 0 = no decay.
+            #TODO NOTIMPLEMENTEDYET
+            # only implemented in sklearn
+            'learning_decay' : 0.000,
         }
 
         # For settings which take a categorical value, provided is a dict of
@@ -139,20 +138,24 @@ class NN_Compare:
 
             'algorithm' : {
                 'sgd' : ['sklearn', 'sknn', 'keras'],
-                'adam' : ['sklearn', 'keras']
+                'adam' : ['sklearn', 'keras'],
+                'adadelta' : ['sknn', 'keras']
             },
-
-            'learning_rate' : { # How the learning rate changes. Only sgd.
-                'constant' : ['sklearn', 'sknn', 'keras'],
-                'invscaling' : ['sklearn'],
-                'adapative' : ['sklearn'],
-                'factor' : ['keras']
-            }
         }
+
+        self._validate_settings()
 
         self.k_folds = k_folds
         self.k_fold = KFold(self.n_samples, n_folds=k_folds, shuffle=True,
                             random_state=self.kfold_seed)
+
+    def _validate_settings(self):
+        ''' Some basic compatibility checks between settings. Doesn't check
+        module-specific validity, e.g. whether sklearn supports an algorithm.
+        '''
+
+        if self.nn_settings['algorithm'] != 'sgd' and self.iter_settings['learning_decay'] != 0.0:
+            raise ValueError("The learning_decay option is for the sgd algorithm only.")
 
     def get_nn_settings(self):
         return self.nn_settings
@@ -161,13 +164,17 @@ class NN_Compare:
         return self.iter_settings
 
     def set_nn_settings(self, new_settings):
-        ''' Set the neural network settings dict's settings '''
+        ''' Update and re-validate the neural network settings dict '''
+
         self.nn_settings.update(new_settings)
+        self._validate_settings()
         return self
 
     def set_iter_settings(self, new_settings):
         ''' Set the iteration settings dict's settings '''
+
         self.iter_settings.update(new_settings)
+        self._validate_settings()
         return self
 
     def run_test(self, module):
@@ -180,7 +187,7 @@ class NN_Compare:
         test = {'module': module,
                 'nn_settings': dict(self.nn_settings),
                 'iter_settings': dict(self.iter_settings)
-                }
+        }
 
 
         F_score = 0.0
@@ -226,15 +233,6 @@ class NN_Compare:
             err_str +=  "\" not supported in Keras."
             raise NotImplementedError(err_str)
 
-        if self.nn_settings['learning_rate'] == 'factor':
-            sgd_decay = self.nn_settings['learning_decay']
-        elif self.nn_settings['learning_rate'] == 'constant':
-            sgd_decay = 0.0
-        else:
-            err_str = "Learning decay style \"" + self.nn_settings['learning_rate']
-            err_str += "\" not supported in Keras."
-            raise NotImplementedError(err_str)
-
         if self.nn_settings['dropout'] != 0.0:
             print "WARNING: I am not convinced that dropout is working correctly in Keras."
 
@@ -264,7 +262,7 @@ class NN_Compare:
         if self.nn_settings['algorithm'] == 'sgd':
             optimiser = SGD(
                 lr=self.nn_settings['learning_rate_init'],
-                decay=sgd_decay,
+                decay=0.0,
                 momentum=self.nn_settings['momentum'],
                 nesterov=self.nn_settings['nesterovs_momentum'],
             )
@@ -316,7 +314,7 @@ class NN_Compare:
         #  Strip settings that are unrecognised by sklearn  #
         #####################################################
 
-        unsupported_keys = ['dropout', 'learning_decay']
+        unsupported_keys = ['dropout']
         bad_settings = [self.nn_settings[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
@@ -347,14 +345,20 @@ class NN_Compare:
         #  Train NN  #
         ##############
 
+        # Tracking for stopping criteria and output
         loss_curve = []
         n_loss = [0]
         stop_reason = 0
         valid_curve = []
 
+        learning_rate = self.nn_settings['learning_rate_init']
+
         for i in range(self.iter_settings['max_epoch']):
             sklearn_nn.fit(X_train, Y_train)
             loss_curve = sklearn_nn.loss_curve_ # sklearn itself keeps a list across fits
+
+            learning_rate *= (1.0 - self.iter_settings['learning_decay'])
+            sklearn_nn.set_params(learning_rate_init = learning_rate)
 
             # Use change in loss_curve to evaluate stability
             if self.converged(loss_curve, n_loss):
@@ -390,9 +394,6 @@ class NN_Compare:
                 learning_rule='momentum'
         else:
             raise NotImplementedError("Only SGD is implemented in Scikit-NN at present.")
-
-        if self.nn_settings['learning_rate'] != 'constant':
-            raise NotImplementedError("Learning decay not supported in SKNN (!)")
 
         if self.nn_settings['alpha'] != 0.0:
             print "WARNING: I am not convinced that L2 is working in SKNN"
