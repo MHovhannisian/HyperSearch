@@ -28,14 +28,113 @@ from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler
 
+class Generic_NN(object):
+    ''' Unified interface to compare neural network modules and hyperparameters.
 
-class NN_Compare(object):
-    ''' Class allows training and testing multiple neural network architectures
-        from disparate Python modules through a uniform interface specifying
-        architecture, learning and convergence properties.
-
-        Works with 1 hidden layer for now.
+    The module is initialised with arguments that associate it with a dataset.
+    Then, neural networks from multiple packages with varying hyperparameters
+    can be trained to this dataset and the results compared. Settings for
+    neural network architecture and behaviour are taken in a format largely
+    matching scikit-learn's MLPClassifier keyword arguments.
     '''
+
+    # Settings which are natively understood by scikit-learn are implemented
+    # exactly as in the scikit-learn documentation:
+    # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
+    # Other settings have a comment starting with "# !!"
+    _default_nn_settings = {
+        ##################
+        #  Architecture  #
+        ##################
+        'hidden_layer_sizes': (15,),
+        'activation': 'relu',
+
+        ####################
+        #  Regularisation  #
+        ####################
+        'alpha': 0.0000,  # L2 penalty. 0.0 = turned off.
+        'dropout': 0.0,  # !! Dropout between hidden and output layers.
+
+        ##############
+        #  Learning  #
+        ##############
+        'learning_rate_init': 0.001,
+        'algorithm': 'sgd',
+        'batch_size': 16,
+
+        # SGD only
+        'momentum': 0.9,
+        'nesterovs_momentum': False,
+
+        # Adam only (Scikit-learn and Keras only)
+        'beta_1': 0.9,
+        'beta_2': 0.999,
+        'epsilon': 1e-8,
+
+        #######################
+        #  Consistent output  # (for developing and debugging)
+        #######################
+        # Doesn't work in Keras (there's a hack though -- see the imports)
+        'random_state': 1,
+
+        ###############################################
+        #  Iterations/epoch settings - DO NOT CHANGE  #
+        ###############################################
+        # Training iteration is handled manually by this class through the
+        # self._iter_settings dict.
+        'warm_start': True,
+        # In scikit-learn (and sknn), "iter" really means epoch.
+        'max_iter': 1,
+        'learning_rate': 'constant',
+    }
+
+
+    # Iteration settings are homogenised through this dict.
+    # This includes stopping conditions and learning rate decay
+    # Each module runs for one epoch between the driver having control.
+    # Note that these override individual modules' stopping settings.
+    _default_iter_settings = {
+        # Epochs to run for if no convergence. Note that max iterations
+        # are not specified but inferred from max_epoch and batch_size
+        'max_epoch': 3,
+
+        # Max decline in loss between epochs to consider converged. (Ratio)
+        'epoch_tol': 0.02,
+
+        # Number of consecutive epochs considered converged before
+        # stopping.
+        'n_stable': 3,
+
+        # For SGD, decay in learning rate between epochs. 0 = no decay.
+        'learning_decay': 0.000,
+
+        # Terminate before the loss stops improving if the accuracy score
+        # on the validation stops improving. Uses epoch_tol and n_stable.
+        'early_stopping': True,
+    }
+
+    # For settings which take a categorical value, provided is a dict of
+    # which settings should work in which of the Python modules.
+    # This dict exists only for reference. It is not used for computaton.
+    supported_settings = {
+        'activation': {
+            'relu': ['sklearn', 'sknn', 'keras'],
+            'linear': ['sknn', 'keras'],
+            'logistic': ['sklearn', 'sknn', 'keras'],
+            'tanh': ['sklearn', 'sknn', 'keras']
+        },
+
+        'nesterovs_momentum': {
+            True: ['sklearn', 'sknn', 'keras'],
+            False: ['sklearn', 'sknn', 'keras']
+        },
+
+        'algorithm': {
+            'sgd': ['sklearn', 'sknn', 'keras'],
+            'adam': ['sklearn', 'keras'],
+            'adadelta': ['sknn', 'keras']
+        }
+    }
 
     def __init__(self, X, Y, split=(0.75, 0.10, 0.15)):
         ''' Initialisaton tasks:
@@ -64,104 +163,9 @@ class NN_Compare(object):
         # Stores all tests which have been run.
         self.tests = []
 
-        # Settings which are natively understood by scikit-learn are implemented
-        # exactly as in the scikit-learn documentation:
-        # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
-        # Other settings have a comment starting with "# !!"
-        self._nn_settings = {
-            ##################
-            #  Architecture  #
-            ##################
-            'hidden_layer_sizes': (15,),
-            'activation': 'relu',
-
-            ####################
-            #  Regularisation  #
-            ####################
-            'alpha': 0.0000,  # L2 penalty. 0.0 = turned off.
-            'dropout': 0.0,  # !! Dropout between hidden and output layers.
-
-            ##############
-            #  Learning  #
-            ##############
-            'learning_rate_init': 0.001,
-            'algorithm': 'sgd',
-            'batch_size': 16,
-
-            # SGD only
-            'momentum': 0.9,
-            'nesterovs_momentum': False,
-
-            # Adam only (Scikit-learn and Keras only)
-            'beta_1': 0.9,
-            'beta_2': 0.999,
-            'epsilon': 1e-8,
-
-            #######################
-            #  Consistent output  # (for developing and debugging)
-            #######################
-            # Doesn't work in Keras (there's a hack though -- see the imports)
-            'random_state': 1,
-
-            ###############################################
-            #  Iterations/epoch settings - DO NOT CHANGE  #
-            ###############################################
-            # Training iteration is handled manually by this class through the
-            # self._iter_settings dict.
-            'warm_start': True,
-            # In scikit-learn (and sknn), "iter" really means epoch.
-            'max_iter': 1,
-            'learning_rate': 'constant',
-        }
-
-        # Iteration settings are homogenised through this dict.
-        # This includes stopping conditions and learning rate decay
-        # Each module runs for one epoch between the driver having control.
-        # Note that these override individual modules' stopping settings.
-        self._iter_settings = {
-            # Epochs to run for if no convergence. Note that max iterations
-            # are not specified but inferred from max_epoch and batch_size
-            'max_epoch': 3,
-
-            # Max decline in loss between epochs to consider converged. (Ratio)
-            'epoch_tol': 0.02,
-
-            # Number of consecutive epochs considered converged before
-            # stopping.
-            'n_stable': 3,
-
-            # For SGD, decay in learning rate between epochs. 0 = no decay.
-            'learning_decay': 0.000,
-
-            # Terminate before the loss stops improving if the accuracy score
-            # on the validation stops improving. Uses epoch_tol and n_stable.
-            'early_stopping': True,
-        }
-
-        # For settings which take a categorical value, provided is a dict of
-        # which settings should work in which of the Python modules.
-        # This dict exists only for reference. It is not used for computaton.
-        self.supported_settings = {
-            'activation': {
-                'relu': ['sklearn', 'sknn', 'keras'],
-                'linear': ['sknn', 'keras'],
-                'logistic': ['sklearn', 'sknn', 'keras'],
-                'tanh': ['sklearn', 'sknn', 'keras']
-            },
-
-            'nesterovs_momentum': {
-                True: ['sklearn', 'sknn', 'keras'],
-                False: ['sklearn', 'sknn', 'keras']
-            },
-
-            'algorithm': {
-                'sgd': ['sklearn', 'sknn', 'keras'],
-                'adam': ['sklearn', 'keras'],
-                'adadelta': ['sknn', 'keras']
-            },
-        }
-
-        self._validate_settings()
+        # Apply the default settings
+        self.set_nn_settings(_default_nn_settings)
+        self.set_iter_settings(_default_iter_settings)
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -213,15 +217,15 @@ class NN_Compare(object):
     def get_iter_settings(self):
         return dict(self._iter_settings)
 
-    def set_nn_settings(self, new_settings):
+    def set_nn_settings(self, **new_settings):
         ''' Update and re-validate the neural network settings dict '''
 
         self._nn_settings.update(new_settings)
         self._validate_settings()
         return self
 
-    def set_iter_settings(self, new_settings):
-        ''' Set the iteration settings dict's settings '''
+    def set_iter_settings(self, **new_settings):
+        ''' Update and re-validate the neural network iteraton settings dict '''
 
         self._iter_settings.update(new_settings)
         self._validate_settings()
@@ -415,7 +419,7 @@ class NN_Compare(object):
         #  Create NN  #
         ###############
 
-        sklearn_nn = SKL_multilabel_MLP(**sklearn_settings)
+        sklearn_nn = SKL_Multilabel_MLP(**sklearn_settings)
 
         ##############
         #  Train NN  #
@@ -616,9 +620,8 @@ class NN_Compare(object):
         else:
             return False
 
-class SKL_multilabel_MLP(SKL_MLP):
-    ''' Small wrapper for Scikit-learn to enable multi-label probability output
-    '''
+class SKL_Multilabel_MLP(SKL_MLP):
+    ''' Wrapper for Scikit-learn enabling multi-label probability output. '''
 
     def __init__(self, hidden_layer_sizes=(100,), activation="relu",
                  algorithm='adam', alpha=0.0001,
@@ -632,7 +635,7 @@ class SKL_multilabel_MLP(SKL_MLP):
 
         self.n_labels = n_labels
 
-        sup = super(SKL_multilabel_MLP, self)
+        sup = super(SKL_Multilabel_MLP, self)
         sup.__init__(hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation, algorithm=algorithm, alpha=alpha,
                      batch_size=batch_size, learning_rate=learning_rate,
@@ -660,5 +663,5 @@ class SKL_multilabel_MLP(SKL_MLP):
             model, where classes are ordered as they are in `self.classes_`.
         """
 
-        proba = super(SKL_multilabel_MLP, self).predict_proba(X)
+        proba = super(SKL_Multilabel_MLP, self).predict_proba(X)
         return proba*self.n_labels
