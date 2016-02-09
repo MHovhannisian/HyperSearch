@@ -13,7 +13,7 @@ import math
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
 
-from sklearn.neural_network import MLPClassifier as sklearn_MLPClassifier
+from sklearn.neural_network import MLPClassifier as SKL_MLP
 
 from sknn.mlp import Classifier as sknn_MLPClassifier, Layer
 
@@ -58,7 +58,10 @@ class NN_Compare(object):
         self.n_features = X.shape[1]
         self.n_outcomes = Y.shape[1]
 
-        # Stores all tests which have been run, will contain a dict attributes
+        # Help Scikit-learn support multi-label classification probabilities
+        self.n_labels_sklearn = self.Y_train.sum(axis=1).mean()
+
+        # Stores all tests which have been run.
         self.tests = []
 
         # Settings which are natively understood by scikit-learn are implemented
@@ -349,7 +352,7 @@ class NN_Compare(object):
             #  Track progress  #
             ####################
 
-            loss_curve.append(history.history['loss'][0])
+            loss_curve.append(history.history['loss'][1])
 
             valid_proba = keras_nn.predict_proba(self.X_validate, verbose=0)
             valid_score = self.score_from_proba(valid_proba, self.Y_validate)
@@ -406,12 +409,13 @@ class NN_Compare(object):
         sklearn_settings = {key: val for key, val in self._nn_settings.items()
                             if key in valid_keys}
 
+        sklearn_settings.update({'n_labels': self.n_labels_sklearn})
+
         ###############
         #  Create NN  #
         ###############
 
-        sklearn_nn = sklearn_MLPClassifier(**sklearn_settings)
-        print sklearn_nn
+        sklearn_nn = SKL_multilabel_MLP(**sklearn_settings)
 
         ##############
         #  Train NN  #
@@ -434,8 +438,7 @@ class NN_Compare(object):
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
             valid_proba = sklearn_nn.predict_proba(self.X_validate)
-            valid_score = self.score_from_proba(
-                valid_proba * 3, self.Y_validate)
+            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
             valid_curve.append(valid_score)
 
             #############################
@@ -451,7 +454,7 @@ class NN_Compare(object):
                 break
 
         test_proba = sklearn_nn.predict_proba(self.X_test)
-        score = self.score_from_proba(test_proba * 3, self.Y_test)
+        score = self.score_from_proba(test_proba, self.Y_test)
 
         return score, loss_curve, valid_curve, sklearn_nn
 
@@ -612,3 +615,50 @@ class NN_Compare(object):
             return True
         else:
             return False
+
+class SKL_multilabel_MLP(SKL_MLP):
+    ''' Small wrapper for Scikit-learn to enable multi-label probability output
+    '''
+
+    def __init__(self, hidden_layer_sizes=(100,), activation="relu",
+                 algorithm='adam', alpha=0.0001,
+                 batch_size=200, learning_rate="constant",
+                 learning_rate_init=0.001, power_t=0.5, max_iter=200,
+                 shuffle=True, random_state=None, tol=1e-4,
+                 verbose=False, warm_start=False, momentum=0.9,
+                 nesterovs_momentum=True, early_stopping=False,
+                 validation_fraction=0.1, beta_1=0.9, beta_2=0.999,
+                 epsilon=1e-8, n_labels=1):
+
+        self.n_labels = n_labels
+
+        sup = super(SKL_multilabel_MLP, self)
+        sup.__init__(hidden_layer_sizes=hidden_layer_sizes,
+                     activation=activation, algorithm=algorithm, alpha=alpha,
+                     batch_size=batch_size, learning_rate=learning_rate,
+                     learning_rate_init=learning_rate_init, power_t=power_t,
+                     max_iter=max_iter, shuffle=shuffle,
+                     random_state=random_state, tol=tol, verbose=verbose,
+                     warm_start=warm_start, momentum=momentum,
+                     nesterovs_momentum=nesterovs_momentum,
+                     early_stopping=early_stopping,
+                     validation_fraction=validation_fraction,
+                     beta_1=beta_1, beta_2=beta_2, epsilon=epsilon)
+
+    def predict_proba(self, X):
+        """Probability estimates.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix}, shape (n_samples, n_features)
+            The input data.
+
+        Returns
+        -------
+        y_prob : array-like, shape (n_samples, n_classes)
+            The predicted probability of the sample for each class in the
+            model, where classes are ordered as they are in `self.classes_`.
+        """
+
+        proba = super(SKL_multilabel_MLP, self).predict_proba(X)
+        return proba*self.n_labels
