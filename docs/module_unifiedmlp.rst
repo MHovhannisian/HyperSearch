@@ -1,9 +1,11 @@
 .. toctree::
 
-:mod:`genericnn` — Generic interface to MLP modules
+:mod:`unifiedmlp` — Generic interface to MLP modules
 ===================================================
 
-The unified interface to multilayer perceptron implementations in Python. Quickstart:
+The unified interface to multilayer perceptron implementations in Python.
+
+Quickstart:
 
 * Instantiate a class instance with an associated dataset ``X, Y``.
 * Run :mod:`set_iter_hypers` and :mod:`set_nn_hypers` to specify non-default hyperparameters of the neural network.
@@ -14,6 +16,6 @@ Please review the :doc:`hyperparameters reference guide<../settings_reference>` 
 Class reference
 ---------------
 
-.. module:: genericnn
-.. autoclass:: GenericNN
+.. module:: unifiedmlp
+.. autoclass:: UnifiedMLP
     :members:

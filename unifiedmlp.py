@@ -12,6 +12,7 @@ import math
 
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
+# from sklearn import DummyClassifier
 
 from sklearn.neural_network import MLPClassifier as SKL_MLP
 
@@ -28,7 +29,7 @@ from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler
 
-class GenericNN(object):
+class UnifiedMLP(object):
     """ Unified interface to compare neural network modules and hyperparameters.
 
     The module is initialised with arguments that associate it with a dataset.
@@ -43,7 +44,7 @@ class GenericNN(object):
         each with n_features elements.
 
     Y : array-like, shape (n_samples, n_classes)
-        Vectors of labelled outcomes for each sample. GenericNN currently
+        Vectors of labelled outcomes for each sample. UnifiedMLP currently
         expects a boolean or binary array specifying membership to each of
         n_classes classes.
 
@@ -169,8 +170,8 @@ class GenericNN(object):
         # Apply the default settings
         self._nn_hypers = {}
         self._iter_hypers = {}
-        self.set_nn_hypers(**GenericNN._default_nn_hypers)
-        self.set_iter_hypers(**GenericNN._default_iter_settings)
+        self.set_nn_hypers(**UnifiedMLP._default_nn_hypers)
+        self.set_iter_hypers(**UnifiedMLP._default_iter_settings)
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -731,3 +732,4 @@ class _SKL_Multilabel_MLP(SKL_MLP):
 
         proba = super(_SKL_Multilabel_MLP, self).predict_proba(X)
         return proba*self.n_labels
+

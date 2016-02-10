@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Generic NN documentation build configuration file, created by
+# Unified MLP documentation build configuration file, created by
 # sphinx-quickstart on Tue Feb  9 19:50:56 2016.
 #
 # This file is execfile()d with the current directory set to its
@@ -56,7 +56,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Generic NN'
+project = u'Unified MLP'
 copyright = u'2016, Gil Rutter'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -189,7 +189,7 @@ html_static_path = ['_static']
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Generic NNdoc'
+htmlhelp_basename = 'Unified MLPdoc'
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -209,7 +209,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'Generic_NN.tex', u'Generic\\_NN Documentation',
+  ('index', 'Unified_MLP.tex', u'Unified\\_MLP Documentation',
    u'Gil Rutter', 'manual'),
 ]
 
@@ -239,7 +239,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'generic_nn', u'Generic_NN Documentation',
+    ('index', 'unified_mlp', u'Unified_MLP Documentation',
      [u'Gil Rutter'], 1)
 ]
 
@@ -253,8 +253,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'Generic_NN', u'Generic_NN Documentation',
-   u'Gil Rutter', 'Generic_NN', 'One line description of project.',
+  ('index', 'Unified_MLP', u'Unified_MLP Documentation',
+   u'Gil Rutter', 'Unified_MLP', 'One line description of project.',
    'Miscellaneous'),
 ]
 
