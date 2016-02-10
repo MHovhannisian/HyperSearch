@@ -33,8 +33,7 @@ class GenericNN(object):
 
     The module is initialised with arguments that associate it with a dataset.
     Then, neural networks from multiple packages with specified hyperparameters
-    can be trained to this dataset and the results compared. Hyperparameters
-    are taken in a format largely matching scikit-learn's MLP keyword arguments.
+    can be trained to this dataset and the results compared.
 
     Parameters
     ----------
@@ -59,7 +58,7 @@ class GenericNN(object):
     # exactly as in the scikit-learn documentation:
     # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
     # Other settings have a comment starting with "# !!"
-    _default_nn_settings = {
+    _default_nn_hypers = {
         ##################
         #  Architecture  #
         ##################
@@ -98,7 +97,7 @@ class GenericNN(object):
         #  Iterations/epoch settings - DO NOT CHANGE  #
         ###############################################
         # Training iteration is handled manually by this class through the
-        # self._iter_settings dict.
+        # self._iter_hypers dict.
         'warm_start': True,
         # In scikit-learn (and sknn), "iter" really means epoch.
         'max_iter': 1,
@@ -154,19 +153,6 @@ class GenericNN(object):
     }
 
     def __init__(self, X, Y, split=(0.75, 0.10, 0.15)):
-        ''' Initialisaton tasks:
-        - Split and store data as self.{train, validate, test}
-        - Set default values for neural networks
-
-        Inputs:
-        X - features of dataset
-        Y - correct labels of dataset
-        split - 3-value tuple of the train/validate/test split
-
-        Returns:
-        self
-        '''
-
         # Normalise inputs and split data
         self.X_train, self.X_validate, self.X_test, self.Y_train, self.Y_validate, self.Y_test = \
             self._prepare_data(X, Y, split)
@@ -181,10 +167,10 @@ class GenericNN(object):
         self.tests = []
 
         # Apply the default settings
-        self._nn_settings = {}
-        self._iter_settings = {}
-        self.set_nn_settings(**GenericNN._default_nn_settings)
-        self.set_iter_settings(**GenericNN._default_iter_settings)
+        self._nn_hypers = {}
+        self._iter_hypers = {}
+        self.set_nn_hypers(**GenericNN._default_nn_hypers)
+        self.set_iter_hypers(**GenericNN._default_iter_settings)
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -229,31 +215,75 @@ class GenericNN(object):
         module-specific validity, e.g. whether sklearn supports an algorithm.
         '''
 
-        if self._nn_settings['algorithm'] != 'sgd' and self._iter_settings['learning_decay'] != 0.0:
+        if self._nn_hypers['algorithm'] != 'sgd' and self._iter_hypers['learning_decay'] != 0.0:
             raise ValueError(
                 "The learning_decay option is for the sgd algorithm only.")
 
-    def get_nn_settings(self):
-        return dict(self._nn_settings)
+    def get_nn_hypers(self):
+        ''' Return neural network hyperparameters
 
-    def get_iter_settings(self):
-        return dict(self._iter_settings)
+        Returns
+        -------
 
-    def set_nn_settings(self, **new_settings):
-        ''' Update and re-validate the neural network settings dict '''
+        nn_settings : dict
+        '''
 
-        self._nn_settings.update(new_settings)
+        return dict(self._nn_hypers)
+
+    def get_iter_hypers(self):
+        ''' Return neural network iteration hyperparameters
+
+        Returns
+        -------
+
+        nn_iter_settings : dict
+        '''
+        return dict(self._iter_hypers)
+
+    def set_nn_hypers(self, **new_settings):
+        ''' Update and re-validate the neural network hyperparameters dict
+
+        Takes keyword arguments to update the internal hyperparameter dict
+        which is accessed when constructing neural networks.
+
+        Returns
+        -------
+
+        self
+        '''
+
+        self._nn_hypers.update(new_settings)
         self._validate_settings()
         return self
 
-    def set_iter_settings(self, **new_settings):
-        ''' Update and re-validate the neural network iteraton settings dict '''
+    def set_iter_hypers(self, **new_settings):
+        ''' Update and re-validate the neural network iteration hyperparameters
+        dict.
 
-        self._iter_settings.update(new_settings)
+        Takes keyword arguments to update the internal iteration hyperparameter
+        dict which is accessed when constructing neural networks.
+
+        Returns
+        -------
+
+        self
+        '''
+
+        self._iter_hypers.update(new_settings)
         self._validate_settings()
         return self
 
     def run_test(self, module='keras'):
+        """ Build, train and test a neural network architecture.
+
+        Parameters
+        ----------
+
+        module : string
+            Which Python module to build the neural network in.
+            One of 'sklearn', 'sknn', or 'keras'.
+        """
+
         modules = {
             'sklearn': self._sklearn,
             'sknn': self._sknn,
@@ -262,8 +292,8 @@ class GenericNN(object):
 
         test = {
             'module': module,
-            '_nn_settings': self.get_nn_settings(),
-            '_iter_settings': self.get_iter_settings()
+            '_nn_hypers': self.get_nn_hypers(),
+            '_iter_hypers': self.get_iter_hypers()
         }
 
         F_score = 0.0
@@ -288,13 +318,13 @@ class GenericNN(object):
         activation_dict = {'relu': 'relu', 'linear': 'linear',
                            'logistic': 'sigmoid', 'tanh': 'tanh'}
         try:
-            activation = activation_dict[self._nn_settings['activation']]
+            activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self._nn_settings['activation']
+            err_str = "Activation function \"" + self._nn_hypers['activation']
             err_str += "\" not supported in Keras."
             raise KeyError(err_str)
 
-        if self._nn_settings['dropout'] != 0.0:
+        if self._nn_hypers['dropout'] != 0.0:
             warnings.warn(
                 "I am not convinced that dropout is working correctly in Keras.")
 
@@ -302,8 +332,8 @@ class GenericNN(object):
         n_epoch = [0]
 
         def learning_schedule(epoch):
-            init = self._nn_settings['learning_rate_init']
-            factor = (1 - self._iter_settings['learning_decay'])**n_epoch[0]
+            init = self._nn_hypers['learning_rate_init']
+            factor = (1 - self._iter_hypers['learning_decay'])**n_epoch[0]
             lr = factor * init
             return lr
 
@@ -314,40 +344,40 @@ class GenericNN(object):
         keras_nn = Sequential()
 
         keras_nn.add(Dense(
-            self._nn_settings['hidden_layer_sizes'][0],
+            self._nn_hypers['hidden_layer_sizes'][0],
             input_dim=self.n_features,
             init='lecun_uniform',
-            W_regularizer=l2(self._nn_settings['alpha']),
+            W_regularizer=l2(self._nn_hypers['alpha']),
             activation=activation)
         )
 
-        keras_nn.add(Dropout(self._nn_settings['dropout']))
+        keras_nn.add(Dropout(self._nn_hypers['dropout']))
 
         keras_nn.add(Dense(
             self.n_classes,
             init='lecun_uniform',
-            W_regularizer=l2(self._nn_settings['alpha']),
+            W_regularizer=l2(self._nn_hypers['alpha']),
             activation='sigmoid')
         )
 
-        if self._nn_settings['algorithm'] == 'sgd':
+        if self._nn_hypers['algorithm'] == 'sgd':
             optimiser = SGD(
-                lr=self._nn_settings['learning_rate_init'],
+                lr=self._nn_hypers['learning_rate_init'],
                 decay=0.0,
-                momentum=self._nn_settings['momentum'],
-                nesterov=self._nn_settings['nesterovs_momentum'],
+                momentum=self._nn_hypers['momentum'],
+                nesterov=self._nn_hypers['nesterovs_momentum'],
             )
-        elif self._nn_settings['algorithm'] == 'adam':
+        elif self._nn_hypers['algorithm'] == 'adam':
             optimiser = Adam(
-                lr=self._nn_settings['learning_rate_init'],
-                beta_1=self._nn_settings['beta_1'],
-                beta_2=self._nn_settings['beta_2'],
-                epsilon=self._nn_settings['epsilon']
+                lr=self._nn_hypers['learning_rate_init'],
+                beta_1=self._nn_hypers['beta_1'],
+                beta_2=self._nn_hypers['beta_2'],
+                epsilon=self._nn_hypers['epsilon']
             )
-        elif self._nn_settings['algorithm'] == 'adadelta':
+        elif self._nn_hypers['algorithm'] == 'adadelta':
             optimiser = Adadelta()  # Recommended to use the default values
         else:
-            err_str = "Learning algorithm \"" + self._nn_settings['algorithm']
+            err_str = "Learning algorithm \"" + self._nn_hypers['algorithm']
             err_str += "\" not implemented in Keras at present."
             raise KeyError(err_str)
 
@@ -363,13 +393,13 @@ class GenericNN(object):
         n_valid = [0]
         stop_reason = 0
 
-        for i in range(self._iter_settings['max_epoch']):
+        for i in range(self._iter_hypers['max_epoch']):
             n_epoch[0] = i
 
             history = keras_nn.fit(
                 self.X_train, self.Y_train,
                 nb_epoch=10,
-                batch_size=self._nn_settings['batch_size'],
+                batch_size=self._nn_hypers['batch_size'],
                 verbose=0,
                 callbacks=[LearningRateScheduler(learning_schedule)]
             )
@@ -392,7 +422,7 @@ class GenericNN(object):
                 stop_reason = 1
                 break
 
-            if self._iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+            if self._iter_hypers['early_stopping'] and self._converged(valid_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -414,14 +444,14 @@ class GenericNN(object):
         #####################################################
 
         unsupported_keys = ['dropout']
-        bad_settings = [self._nn_settings[key] > 0 for key in unsupported_keys]
+        bad_settings = [self._nn_hypers[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
             err_str = "The following unsupported settings are not set to 0.0:\n"
             for i, key in enumerate(unsupported_keys):
                 if bad_settings[i]:
                     err_str += "\t" + key + ": " + \
-                        str(self._nn_settings[key]) + "\n"
+                        str(self._nn_hypers[key]) + "\n"
             raise KeyError(err_str)
 
         valid_keys = [
@@ -432,7 +462,7 @@ class GenericNN(object):
             'beta_1', 'beta_2', 'epsilon', 'algorithm'
         ]
 
-        sklearn_settings = {key: val for key, val in self._nn_settings.items()
+        sklearn_settings = {key: val for key, val in self._nn_hypers.items()
                             if key in valid_keys}
 
         sklearn_settings.update({'n_labels': self.n_labels_sklearn})
@@ -454,13 +484,13 @@ class GenericNN(object):
         n_valid = [0]
         stop_reason = 0
 
-        learning_rate = self._nn_settings['learning_rate_init']
+        learning_rate = self._nn_hypers['learning_rate_init']
 
-        for i in range(self._iter_settings['max_epoch']):
+        for i in range(self._iter_hypers['max_epoch']):
             sklearn_nn.fit(self.X_train, self.Y_train)
             loss_curve = sklearn_nn.loss_curve_  # sklearn itself keeps a list across fits
 
-            learning_rate *= (1.0 - self._iter_settings['learning_decay'])
+            learning_rate *= (1.0 - self._iter_hypers['learning_decay'])
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
             valid_proba = sklearn_nn.predict_proba(self.X_validate)
@@ -475,7 +505,7 @@ class GenericNN(object):
                 stop_reason = 1
                 break
 
-            if self._iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+            if self._iter_hypers['early_stopping'] and self._converged(valid_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -493,30 +523,30 @@ class GenericNN(object):
         activation_dict = {
             'relu': 'Rectifier', 'linear': 'Linear', 'logistic': 'Sigmoid', 'tanh': 'Tanh'}
         try:
-            activation = activation_dict[self._nn_settings['activation']]
+            activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self._nn_settings['activation']
+            err_str = "Activation function \"" + self._nn_hypers['activation']
             err_str += "\" not supported in SKNN."
             raise KeyError(err_str)
 
-        if self._nn_settings['algorithm'] == 'sgd':
-            if self._nn_settings['momentum'] == 0.0:
+        if self._nn_hypers['algorithm'] == 'sgd':
+            if self._nn_hypers['momentum'] == 0.0:
                 learning_rule = 'sgd'
-            elif self._nn_settings['nesterovs_momentum'] is True:
+            elif self._nn_hypers['nesterovs_momentum'] is True:
                 learning_rule = 'nesterov'
             else:
                 learning_rule = 'momentum'
-        elif self._nn_settings['algorithm'] == 'adadelta':
+        elif self._nn_hypers['algorithm'] == 'adadelta':
             learning_rule = 'adadelta'
         else:
             raise KeyError(
                 "Only SGD and Adadelta implemented in Scikit-NN at present.")
 
-        if self._iter_settings['learning_decay'] != 0.0:
+        if self._iter_hypers['learning_decay'] != 0.0:
             raise KeyError(
                 "SGD learning decay not supported in SKNN (!)")
 
-        if self._nn_settings['alpha'] != 0.0:
+        if self._nn_hypers['alpha'] != 0.0:
             warnings.warn(
                 "I am not convinced that L2 is working correctly in SKNN.")
 
@@ -535,22 +565,22 @@ class GenericNN(object):
         sknn_nn = sknn_MLPClassifier(
 
             # sknn_nn architecture
-            layers=[Layer(activation, units=self._nn_settings['hidden_layer_sizes'][0],),
+            layers=[Layer(activation, units=self._nn_hypers['hidden_layer_sizes'][0],),
                     Layer("Softmax", units=2 * self.n_classes)],
 
             # Learning settings
             loss_type='mcc',
-            learning_rate=self._nn_settings['learning_rate_init'],
+            learning_rate=self._nn_hypers['learning_rate_init'],
             learning_rule=learning_rule,
-            learning_momentum=self._nn_settings['momentum'],
-            batch_size=self._nn_settings['batch_size'],
+            learning_momentum=self._nn_hypers['momentum'],
+            batch_size=self._nn_hypers['batch_size'],
             n_iter=1,
 
             # Regularisation
-            weight_decay=self._nn_settings['alpha'],
-            dropout_rate=self._nn_settings['dropout'],
+            weight_decay=self._nn_hypers['alpha'],
+            dropout_rate=self._nn_hypers['dropout'],
 
-            random_state=self._nn_settings['random_state'],
+            random_state=self._nn_hypers['random_state'],
 
             # Callback to get loss
             callback={'on_batch_finish': batch_callback},
@@ -570,7 +600,7 @@ class GenericNN(object):
         n_valid = [0]
         stop_reason = 0
 
-        for i in range(self._iter_settings['max_epoch']):
+        for i in range(self._iter_hypers['max_epoch']):
             sknn_nn.fit(self.X_train, self.Y_train)
             loss_curve.append(batch_loss[0])
 
@@ -585,7 +615,7 @@ class GenericNN(object):
                 stop_reason = 1
                 break
 
-            if self._iter_settings['early_stopping'] and self._converged(valid_curve, n_valid):
+            if self._iter_hypers['early_stopping'] and self._converged(valid_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -632,12 +662,12 @@ class GenericNN(object):
         except IndexError:
             return False
 
-        if objective_ratio < self._iter_settings['epoch_tol']:
+        if objective_ratio < self._iter_hypers['epoch_tol']:
             n_objective[0] += 1
         else:
             n_objective[0] = 0
 
-        if n_objective[0] == self._iter_settings['n_stable']:
+        if n_objective[0] == self._iter_hypers['n_stable']:
             return True
         else:
             return False

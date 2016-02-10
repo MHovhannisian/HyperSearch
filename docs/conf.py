@@ -35,8 +35,13 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.pngmath',
     'sphinx.ext.autosummary',
+    'sphinxcontrib.fulltoc',
     'numpydoc'
 ]
+
+html_sidebars = {
+    '**': ['localtoc.html', 'searchbox.html'],
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
