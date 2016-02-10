@@ -28,15 +28,32 @@ from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler
 
-class Generic_NN(object):
-    ''' Unified interface to compare neural network modules and hyperparameters.
+class GenericNN(object):
+    """ Unified interface to compare neural network modules and hyperparameters.
 
     The module is initialised with arguments that associate it with a dataset.
-    Then, neural networks from multiple packages with varying hyperparameters
-    can be trained to this dataset and the results compared. Settings for
-    neural network architecture and behaviour are taken in a format largely
-    matching scikit-learn's MLPClassifier keyword arguments.
-    '''
+    Then, neural networks from multiple packages with specified hyperparameters
+    can be trained to this dataset and the results compared. Hyperparameters
+    are taken in a format largely matching scikit-learn's MLP keyword arguments.
+
+    Parameters
+    ----------
+
+    X : array-like, shape (n_samples, n_features)
+        Vectors of features for each sample, where there are n_samples vectors
+        each with n_features elements.
+
+    Y : array-like, shape (n_samples, n_classes)
+        Vectors of labelled outcomes for each sample. GenericNN currently
+        expects a boolean or binary array specifying membership to each of
+        n_classes classes.
+
+    split : tuple of 3 entries, summing to 1.0 or less.
+        The split of data between training, validation and testing. Training
+        data is passed to fit() methods, validation data is used to track
+        fitting progress and can be used for early stopping, and test data is
+        used for the final evaluation of model quality.
+    """
 
     # Settings which are natively understood by scikit-learn are implemented
     # exactly as in the scikit-learn documentation:
@@ -155,7 +172,7 @@ class Generic_NN(object):
             self._prepare_data(X, Y, split)
 
         self.n_features = X.shape[1]
-        self.n_outcomes = Y.shape[1]
+        self.n_classes = Y.shape[1]
 
         # Help Scikit-learn support multi-label classification probabilities
         self.n_labels_sklearn = self.Y_train.sum(axis=1).mean()
@@ -164,8 +181,10 @@ class Generic_NN(object):
         self.tests = []
 
         # Apply the default settings
-        self.set_nn_settings(_default_nn_settings)
-        self.set_iter_settings(_default_iter_settings)
+        self._nn_settings = {}
+        self._iter_settings = {}
+        self.set_nn_settings(**GenericNN._default_nn_settings)
+        self.set_iter_settings(**GenericNN._default_iter_settings)
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -173,16 +192,19 @@ class Generic_NN(object):
         Y = np.array(Y).astype(bool)
 
         try:
-            assert(sum(split) == 1.0)
-        except AssertionError:
-            raise AssertionError("Suggested data split doesn't sum to 1.0")
-
-        try:
             assert(X.shape[0] == Y.shape[0])
         except AssertionError:
             raise AssertionError("Number of samples differs between X and Y.")
 
         split_randint = 0
+
+        split_sum = sum(split)
+        if split_sum < 1.0:
+            warnings.warn("Suggested data split doesn't use full dataset.")
+        if split_sum > 1.0:
+            raise Exception("Specified data split sums to over 1.0.")
+
+        raise NotImplementedError("Get splitting working with split_sum <= 1.0!")
 
         X_train, X, Y_train, Y = train_test_split(
             X, Y, test_size=split[1] + split[2], random_state=split_randint)
@@ -231,7 +253,7 @@ class Generic_NN(object):
         self._validate_settings()
         return self
 
-    def run_test(self, module):
+    def run_test(self, module='keras'):
         modules = {
             'sklearn': self._sklearn,
             'sknn': self._sknn,
@@ -302,7 +324,7 @@ class Generic_NN(object):
         keras_nn.add(Dropout(self._nn_settings['dropout']))
 
         keras_nn.add(Dense(
-            self.n_outcomes,
+            self.n_classes,
             init='lecun_uniform',
             W_regularizer=l2(self._nn_settings['alpha']),
             activation='sigmoid')
@@ -359,7 +381,7 @@ class Generic_NN(object):
             loss_curve.append(history.history['loss'][1])
 
             valid_proba = keras_nn.predict_proba(self.X_validate, verbose=0)
-            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
+            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
             valid_curve.append(valid_score)
 
             #############################
@@ -375,13 +397,13 @@ class Generic_NN(object):
                 break
 
         test_proba = keras_nn.predict_proba(self.X_test, verbose=0)
-        score = self.score_from_proba(test_proba, self.Y_test)
+        score = self._score_from_proba(test_proba, self.Y_test)
 
         return score, loss_curve, valid_curve, keras_nn
 
     @staticmethod
-    def score_from_proba(proba, Y):
-        predictions = (proba > 0.5)
+    def _score_from_proba(proba, Y, thres=0.5):
+        predictions = (proba > thres)
         score = (predictions == Y).mean()
         return score
 
@@ -442,7 +464,7 @@ class Generic_NN(object):
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
             valid_proba = sklearn_nn.predict_proba(self.X_validate)
-            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
+            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
             valid_curve.append(valid_score)
 
             #############################
@@ -458,7 +480,7 @@ class Generic_NN(object):
                 break
 
         test_proba = sklearn_nn.predict_proba(self.X_test)
-        score = self.score_from_proba(test_proba, self.Y_test)
+        score = self._score_from_proba(test_proba, self.Y_test)
 
         return score, loss_curve, valid_curve, sklearn_nn
 
@@ -514,7 +536,7 @@ class Generic_NN(object):
 
             # sknn_nn architecture
             layers=[Layer(activation, units=self._nn_settings['hidden_layer_sizes'][0],),
-                    Layer("Softmax", units=2 * self.n_outcomes)],
+                    Layer("Softmax", units=2 * self.n_classes)],
 
             # Learning settings
             loss_type='mcc',
@@ -555,7 +577,7 @@ class Generic_NN(object):
             # NOTE: predict_proba returns 2 entries per binary class, which are
             # True and False, adding to 1.0. We take the probability of True.
             valid_proba = sknn_nn.predict_proba(self.X_validate)[:, 1::2]
-            valid_score = self.score_from_proba(valid_proba, self.Y_validate)
+            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
             valid_curve.append(valid_score)
 
             # Use change in loss_curve to evaluate stability
@@ -568,11 +590,11 @@ class Generic_NN(object):
                 break
 
         predict_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
-        score = self.score_from_proba(predict_proba, self.Y_test)
+        score = self._score_from_proba(predict_proba, self.Y_test)
 
         return score, loss_curve, valid_curve, sknn_nn
 
-    def get_score(self, predictions, answers):
+    def _get_score(self, predictions, answers):
         ''' Returns the F1 score and simple score (percent correct).
             Requires predictions and answers in 0 and 1 int or bool format.
         '''
