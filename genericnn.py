@@ -152,7 +152,7 @@ class GenericNN(object):
         }
     }
 
-    def __init__(self, X, Y, split=(0.75, 0.10, 0.15)):
+    def __init__(self, X, Y, split=(0.90, 0.01, 0.01)):
         # Normalise inputs and split data
         self.X_train, self.X_validate, self.X_test, self.Y_train, self.Y_validate, self.Y_test = \
             self._prepare_data(X, Y, split)
@@ -184,23 +184,26 @@ class GenericNN(object):
 
         split_randint = 0
 
-        split_sum = sum(split)
-        if split_sum < 1.0:
+        leftover = 1.0 - sum(split)
+        if leftover > 0.0:
             warnings.warn("Suggested data split doesn't use full dataset.")
-        if split_sum > 1.0:
-            raise Exception("Specified data split sums to over 1.0.")
+        if leftover < 0.0:
+            raise ValueError("Specified data split sums to over 1.0.")
 
-        raise NotImplementedError("Get splitting working with split_sum <= 1.0!")
+        X, X_train, Y, Y_train = train_test_split(
+            X, Y, test_size=split[0], random_state=split_randint)
 
-        X_train, X, Y_train, Y = train_test_split(
-            X, Y, test_size=split[1] + split[2], random_state=split_randint)
+        X, X_validate, Y, Y_validate = train_test_split(
+            X, Y, test_size=split[1] / (split[1] + split[2] + leftover),
+            random_state=split_randint)
 
-        X_validate, X_test, Y_validate, Y_test =\
-            train_test_split(
-                X, Y,
-                test_size=split[2] / (split[1] + split[2]),
-                random_state=split_randint
-            )
+        try:
+            _, X_test, _, Y_test = train_test_split(
+                X, Y, test_size=split[2] / (split[2] + leftover),
+                random_state=split_randint)
+        except ValueError:
+            # scikit-learn doesn't like test_size=1.0
+            X_test, Y_test = X, Y
 
         # Train the normaliser on training data only
         normaliser = preprocessing.StandardScaler().fit(X_train)
@@ -282,6 +285,17 @@ class GenericNN(object):
         module : string
             Which Python module to build the neural network in.
             One of 'sklearn', 'sknn', or 'keras'.
+
+        Returns
+        -------
+
+        test : dict
+            Results of the test. Includes a per-epoch `loss_curve` and
+            `valid_curve` of score on the validation dataset.  Full copies of
+            hyperparameters at the time of the test are indexed by the keys
+            `nn_hypers` and `iter_hypers`. The final `score` is recorded and
+            the trained `model` is also exposed. A record of the `module` used
+            is also kept.
         """
 
         modules = {
@@ -292,8 +306,8 @@ class GenericNN(object):
 
         test = {
             'module': module,
-            '_nn_hypers': self.get_nn_hypers(),
-            '_iter_hypers': self.get_iter_hypers()
+            'nn_hypers': self.get_nn_hypers(),
+            'iter_hypers': self.get_iter_hypers()
         }
 
         F_score = 0.0
@@ -471,7 +485,7 @@ class GenericNN(object):
         #  Create NN  #
         ###############
 
-        sklearn_nn = SKL_Multilabel_MLP(**sklearn_settings)
+        sklearn_nn = _SKL_Multilabel_MLP(**sklearn_settings)
 
         ##############
         #  Train NN  #
@@ -672,7 +686,7 @@ class GenericNN(object):
         else:
             return False
 
-class SKL_Multilabel_MLP(SKL_MLP):
+class _SKL_Multilabel_MLP(SKL_MLP):
     ''' Wrapper for Scikit-learn enabling multi-label probability output. '''
 
     def __init__(self, hidden_layer_sizes=(100,), activation="relu",
@@ -687,7 +701,7 @@ class SKL_Multilabel_MLP(SKL_MLP):
 
         self.n_labels = n_labels
 
-        sup = super(SKL_Multilabel_MLP, self)
+        sup = super(_SKL_Multilabel_MLP, self)
         sup.__init__(hidden_layer_sizes=hidden_layer_sizes,
                      activation=activation, algorithm=algorithm, alpha=alpha,
                      batch_size=batch_size, learning_rate=learning_rate,
@@ -715,5 +729,5 @@ class SKL_Multilabel_MLP(SKL_MLP):
             model, where classes are ordered as they are in `self.classes_`.
         """
 
-        proba = super(SKL_Multilabel_MLP, self).predict_proba(X)
+        proba = super(_SKL_Multilabel_MLP, self).predict_proba(X)
         return proba*self.n_labels
