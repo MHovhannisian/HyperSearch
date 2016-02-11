@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# Core Python modules
 import pickle
-import numpy as np
 import itertools
+
+# User-contributed modules
+import numpy as np
+import progressbar
 
 import unifiedmlp
 
@@ -38,29 +42,30 @@ class HyperSearch(object):
             self._search_hyper_vals.append(np.sort(np.array(range_)))
 
         self._n_dims = len(self._search_hyper_names)
-        self._dims = tuple(len(self._search_hyper_vals[i]) for i in range(self._n_dims))
+        self._dims = np.array([len(self._search_hyper_vals[i]) for i in range(self._n_dims)])
         self._dim_idxs = tuple(range(len(self._search_hyper_vals[i])) for i in range(self._n_dims))
-
-        print self._dims
-        print self._dim_idxs
 
         self.tests = np.empty(self._dims, dtype=object)
 
         return self
 
     def run_tests(self):
+        try:
+            assert (self.search)
+        except AssertionError:
+            raise AssertionError('No parameters to search over were specified.')
 
-        # for something
-        print self._search_hyper_names
-        print self._search_hyper_vals
-        print self.tests
+        n_tests = np.prod(self._dims)
+        bar = progressbar.ProgressBar(maxval=n_tests).start()
 
-        print list(itertools.product(*self._dim_idxs))
-        for coordinates in itertools.product(*self._dim_idxs):
+        for i, coordinates in enumerate(itertools.product(*self._dim_idxs)):
             this_settings = {self._search_hyper_names[i]: self._search_hyper_vals[i][coord]
                                     for i, coord in enumerate(coordinates)}
             self.MLP.set_hypers(**this_settings)
-            print this_settings
+
+            self.tests[coordinates] = self.MLP.run_test()
+
+            bar.update(i+1)
 
     def self_pickle(self):
         ''' Save the state of the HyperSearch instance. '''
@@ -88,5 +93,5 @@ if __name__ == "__main__":
     Ys = pd_df.ix[:, 15:25]
 
     hs = HyperSearch(X, Ys).self_pickle().set_fixed(hi="bye")
-    hs.set_search(dropout=[0.1, 0.4], alpha=[0.1, 0.2, 0.3])
+    hs.set_search(dropout=[0.0, 0.1], alpha=[0.0, 0.0])
     hs.run_tests()

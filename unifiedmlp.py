@@ -247,6 +247,11 @@ class UnifiedMLP(object):
         self
         '''
 
+        # Not all modules can take numbers that aren't of a builtin type
+        for key in new_settings.keys():
+            if type(new_settings[key]).__module__ == 'numpy':
+                new_settings[key] = float(new_settings[key])
+
         self._nn_hypers.update(new_settings)
         self._validate_settings()
         return self
@@ -296,10 +301,6 @@ class UnifiedMLP(object):
             err_str = "Activation function \"" + self._nn_hypers['activation']
             err_str += "\" not supported in Keras."
             raise KeyError(err_str)
-
-        if self._nn_hypers['dropout'] != 0.0:
-            warnings.warn(
-                "I am not convinced that dropout is working correctly in Keras.")
 
         # Callback for SGD learning rate decline
         n_epoch = [0]
