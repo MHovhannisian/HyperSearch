@@ -574,10 +574,6 @@ class UnifiedMLP(object):
             raise KeyError(
                 "SGD learning decay not supported in SKNN (!)")
 
-        if self._nn_hypers['alpha'] != 0.0:
-            warnings.warn(
-                "I am not convinced that L2 is working correctly in SKNN.")
-
         # The contents of a mutable variable can be changed in a closure.
         # SKNN doesn't give access to the loss in the end-of-epoch callback,
         # only in the end-of-batch callback.
@@ -636,7 +632,7 @@ class UnifiedMLP(object):
             # True and False, adding to 1.0. We take the probability of True.
             valid_proba = sknn_nn.predict_proba(self.X_valid)[:, 1::2]
             valid_predict = self._predict_from_proba(valid_proba)
-            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_proba)
+            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
             valid_curve.append(valid_accuracy)
 
             # Use change in loss_curve to evaluate stability
@@ -648,7 +644,7 @@ class UnifiedMLP(object):
                 stop_reason = 2
                 break
 
-        predict_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
+        test_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1 = getScores(self.Y_valid, test_predict)
 
@@ -743,7 +739,7 @@ class _StratifiedRandomClassifier(object):
         self.weights = Y.mean(axis=0)
         return self
 
-    def accuracy(self, X):
+    def getAccuracy(self):
         ''' Analytically assess the expected accuracy.
 
         accuracy = correct_predictions/all_predictions
@@ -769,8 +765,8 @@ class _StratifiedRandomClassifier(object):
             n_true = true_idxs[0].shape[0]
             n_false = false_idxs[0].shape[0]
 
-            n_true_assign_true = int(weight*n_true)
-            n_false_assign_true = int(weight*n_false)
+            n_true_assign_true = int(round(weight*n_true))
+            n_false_assign_true = int(round(weight*n_false))
 
             predictions[true_idxs[0][:n_true_assign_true], i_class] = True
             predictions[false_idxs[0][:n_false_assign_true], i_class] = True
