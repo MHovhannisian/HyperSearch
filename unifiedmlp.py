@@ -56,11 +56,7 @@ class UnifiedMLP(object):
         used for the final evaluation of model quality.
     """
 
-    # Settings which are natively understood by scikit-learn are implemented
-    # exactly as in the scikit-learn documentation:
-    # http://scikit-learn.org/dev/modules/generated/sklearn.neural_network.MLPClassifier.html
-    # Other settings have a comment starting with "# !!"
-    _default_nn_hypers = {
+    _default_hypers = {
         ##################
         #  Architecture  #
         ##################
@@ -95,31 +91,24 @@ class UnifiedMLP(object):
         # Doesn't work in Keras (there's a hack though -- see the imports)
         'random_state': 1,
 
-        ###############################################
-        #  Iterations/epoch settings - DO NOT CHANGE  #
-        ###############################################
-        # Training iteration is handled manually by this class through the
-        # self._iter_hypers dict.
+        ####################################################
+        #  Iteration/epoch settings - don't change these!  #
+        ####################################################
         'warm_start': True,
         # In scikit-learn (and sknn), "iter" really means epoch.
         'max_iter': 1,
         'learning_rate': 'constant',
-    }
 
-    # Iteration settings are homogenised through this dict.
-    # This includes stopping conditions and learning rate decay
-    # Each module runs for one epoch between the driver having control.
-    # Note that these override individual modules' stopping settings.
-    _default_iter_settings = {
-        # Epochs to run for if no convergence. Note that max iterations
-        # are not specified but inferred from max_epoch and batch_size
+        ###############################################
+        #  Iteration/epoch settings - can be changed  #
+        ###############################################
+        # Epochs to run for if no convergence.
         'max_epoch': 3,
 
         # Max decline in loss between epochs to consider converged. (Ratio)
         'epoch_tol': 0.02,
 
-        # Number of consecutive epochs considered converged before
-        # stopping.
+        # Number of consecutive epochs considered converged before stopping.
         'n_stable': 3,
 
         # For SGD, decay in learning rate between epochs. 0 = no decay.
@@ -172,9 +161,7 @@ class UnifiedMLP(object):
 
         # Apply the default settings
         self._nn_hypers = {}
-        self._iter_hypers = {}
-        self.set_nn_hypers(**UnifiedMLP._default_nn_hypers)
-        self.set_iter_hypers(**UnifiedMLP._default_iter_settings)
+        self.set_hypers(**UnifiedMLP._default_hypers)
 
     def _benchmark(self):
 
@@ -233,11 +220,11 @@ class UnifiedMLP(object):
         module-specific validity, e.g. whether sklearn supports an algorithm.
         '''
 
-        if self._nn_hypers['algorithm'] != 'sgd' and self._iter_hypers['learning_decay'] != 0.0:
+        if self._nn_hypers['algorithm'] != 'sgd' and self._nn_hypers['learning_decay'] != 0.0:
             raise ValueError(
                 "The learning_decay option is for the sgd algorithm only.")
 
-    def get_nn_hypers(self):
+    def get_hypers(self):
         ''' Return neural network hyperparameters
 
         Returns
@@ -248,21 +235,10 @@ class UnifiedMLP(object):
 
         return dict(self._nn_hypers)
 
-    def get_iter_hypers(self):
-        ''' Return neural network iteration hyperparameters
-
-        Returns
-        -------
-
-        nn_iter_settings : dict
-        '''
-        return dict(self._iter_hypers)
-
-    def set_nn_hypers(self, **new_settings):
+    def set_hypers(self, **new_settings):
         ''' Update and re-validate the neural network hyperparameters dict
 
-        Takes keyword arguments to update the internal hyperparameter dict
-        which is accessed when constructing neural networks.
+        Takes keyword arguments.
 
         Returns
         -------
@@ -271,23 +247,6 @@ class UnifiedMLP(object):
         '''
 
         self._nn_hypers.update(new_settings)
-        self._validate_settings()
-        return self
-
-    def set_iter_hypers(self, **new_settings):
-        ''' Update and re-validate the neural network iteration hyperparameters
-        dict.
-
-        Takes keyword arguments to update the internal iteration hyperparameter
-        dict which is accessed when constructing neural networks.
-
-        Returns
-        -------
-
-        self
-        '''
-
-        self._iter_hypers.update(new_settings)
         self._validate_settings()
         return self
 
@@ -305,12 +264,7 @@ class UnifiedMLP(object):
         -------
 
         test : dict
-            Results of the test. Includes a per-epoch `loss_curve` and
-            `accuracy_curve` of score on the validation dataset.  Full copies of
-            hyperparameters at the time of the test are indexed by the keys
-            `nn_hypers` and `iter_hypers`. The final `score` is recorded and
-            the trained `model` is also exposed. A record of the `module` used
-            is also kept.
+            Stores results of the test. :ref:`test-dict`.
         """
 
         modules = {
@@ -321,8 +275,7 @@ class UnifiedMLP(object):
 
         test = {
             'module': module,
-            'nn_hypers': self.get_nn_hypers(),
-            'iter_hypers': self.get_iter_hypers()
+            'hypers': self.get_hypers()
         }
 
         F_score = 0.0
@@ -364,7 +317,7 @@ class UnifiedMLP(object):
 
         def learning_schedule(epoch):
             init = self._nn_hypers['learning_rate_init']
-            factor = (1 - self._iter_hypers['learning_decay'])**n_epoch[0]
+            factor = (1 - self._nn_hypers['learning_decay'])**n_epoch[0]
             lr = factor * init
             return lr
 
@@ -425,7 +378,7 @@ class UnifiedMLP(object):
         n_valid = [0]
         stop_reason = 0
 
-        for i in range(self._iter_hypers['max_epoch']):
+        for i in range(self._nn_hypers['max_epoch']):
             n_epoch[0] = i
 
             history = keras_nn.fit(
@@ -456,7 +409,7 @@ class UnifiedMLP(object):
                 stop_reason = 1
                 break
 
-            if self._iter_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -523,11 +476,11 @@ class UnifiedMLP(object):
 
         learning_rate = self._nn_hypers['learning_rate_init']
 
-        for i in range(self._iter_hypers['max_epoch']):
+        for i in range(self._nn_hypers['max_epoch']):
             sklearn_nn.fit(self.X_train, self.Y_train)
             loss_curve = sklearn_nn.loss_curve_  # sklearn itself keeps a list across fits
 
-            learning_rate *= (1.0 - self._iter_hypers['learning_decay'])
+            learning_rate *= (1.0 - self._nn_hypers['learning_decay'])
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
             valid_proba = sklearn_nn.predict_proba(self.X_valid)
@@ -545,7 +498,7 @@ class UnifiedMLP(object):
                 stop_reason = 1
                 break
 
-            if self._iter_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -586,15 +539,15 @@ class UnifiedMLP(object):
             raise KeyError(
                 "Only SGD and Adadelta implemented in Scikit-NN at present.")
 
-        if self._iter_hypers['learning_decay'] != 0.0:
+        if self._nn_hypers['learning_decay'] != 0.0:
             raise KeyError(
                 "SGD learning decay not supported in SKNN (!)")
 
         # The contents of a mutable variable can be changed in a closure.
-        # SKNN doesn't give access to the loss in the end-of-epoch callback,
-        # only in the end-of-batch callback.
         batch_loss = [0]
 
+        # SKNN doesn't give access to the loss in the end-of-epoch callback,
+        # only in the end-of-batch callback.
         def batch_callback(**variables):
             batch_loss[0] = variables['loss'] / variables['count']
 
@@ -604,7 +557,7 @@ class UnifiedMLP(object):
 
         sknn_nn = sknn_MLPClassifier(
 
-            # sknn_nn architecture
+            # Architecture
             layers=[Layer(activation, units=self._nn_hypers['hidden_layer_sizes'][0],),
                     Layer("Softmax", units=2 * self.n_classes)],
 
@@ -639,7 +592,7 @@ class UnifiedMLP(object):
         n_valid = [0]
         stop_reason = 0
 
-        for i in range(self._iter_hypers['max_epoch']):
+        for i in range(self._nn_hypers['max_epoch']):
             sknn_nn.fit(self.X_train, self.Y_train)
             loss_curve.append(batch_loss[0])
 
@@ -657,7 +610,7 @@ class UnifiedMLP(object):
                 stop_reason = 1
                 break
 
-            if self._iter_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
                 stop_reason = 2
                 break
 
@@ -689,12 +642,12 @@ class UnifiedMLP(object):
         except IndexError:
             return False
 
-        if objective_ratio < self._iter_hypers['epoch_tol']:
+        if objective_ratio < self._nn_hypers['epoch_tol']:
             n_objective[0] += 1
         else:
             n_objective[0] = 0
 
-        if n_objective[0] == self._iter_hypers['n_stable']:
+        if n_objective[0] == self._nn_hypers['n_stable']:
             return True
         else:
             return False

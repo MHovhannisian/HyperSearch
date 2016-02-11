@@ -1,7 +1,7 @@
 .. toctree::
 
 :mod:`unifiedmlp` — Generic interface to MLP modules
-===================================================
+====================================================
 
 The unified interface to multilayer perceptron implementations in Python.
 
@@ -19,3 +19,10 @@ Class reference
 .. module:: unifiedmlp
 .. autoclass:: UnifiedMLP
     :members:
+
+.. _test-dict:
+
+Test dict reference
+-------------------
+
+Hello
