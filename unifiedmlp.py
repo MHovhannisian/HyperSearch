@@ -202,20 +202,23 @@ class UnifiedMLP(object):
         if leftover < 0.0:
             raise ValueError("Specified data split sums to over 1.0.")
 
-        X, X_train, Y, Y_train = train_test_split(
-            X, Y, test_size=split[0], random_state=split_randint)
+        # Assign test and validation data before training data.
+        # This ensures training data size can be varied and other
+        # datasets will stay identical.
+        X, X_test, Y, Y_test = train_test_split(
+            X, Y, test_size=split[2], random_state=split_randint)
 
         X, X_valid, Y, Y_valid = train_test_split(
-            X, Y, test_size=split[1] / (split[1] + split[2] + leftover),
+            X, Y, test_size=split[1] / (split[1] + split[0] + leftover),
             random_state=split_randint)
 
         try:
-            _, X_test, _, Y_test = train_test_split(
-                X, Y, test_size=split[2] / (split[2] + leftover),
+            _, X_train, _, Y_train = train_test_split(
+                X, Y, test_size=split[0] / (split[0] + leftover),
                 random_state=split_randint)
         except ValueError:
             # scikit-learn doesn't like test_size=1.0
-            X_test, Y_test = X, Y
+            X_train, Y_train = X, Y
 
         # Train the normaliser on training data only
         normaliser = preprocessing.StandardScaler().fit(X_train)
