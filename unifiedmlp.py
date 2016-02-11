@@ -12,7 +12,7 @@ import math
 
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
-# from sklearn import DummyClassifier
+from sklearn.dummy import DummyClassifier
 
 from sklearn.neural_network import MLPClassifier as SKL_MLP
 
@@ -153,9 +153,9 @@ class UnifiedMLP(object):
         }
     }
 
-    def __init__(self, X, Y, split=(0.90, 0.01, 0.01)):
+    def __init__(self, X, Y, split=(0.70, 0.15, 0.15)):
         # Normalise inputs and split data
-        self.X_train, self.X_validate, self.X_test, self.Y_train, self.Y_validate, self.Y_test = \
+        self.X_train, self.X_valid, self.X_test, self.Y_train, self.Y_valid, self.Y_test = \
             self._prepare_data(X, Y, split)
 
         self.n_features = X.shape[1]
@@ -167,11 +167,22 @@ class UnifiedMLP(object):
         # Stores all tests which have been run.
         self.tests = []
 
+        # self.tests[0] is benchmark (stratified random)
+        self._benchmark()
+
         # Apply the default settings
         self._nn_hypers = {}
         self._iter_hypers = {}
         self.set_nn_hypers(**UnifiedMLP._default_nn_hypers)
         self.set_iter_hypers(**UnifiedMLP._default_iter_settings)
+
+    def _benchmark(self):
+
+        classifier = _StratifiedRandomClassifier().fit(self.X_train, self.Y_train)
+        Y_test_pred = classifier.predict(self.X_test, self.Y_test)
+
+        accuracy, F1 = getScores(self.Y_test, Y_test_pred)
+        self.benchmark = {'F1': F1, 'accuracy': accuracy}
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -194,7 +205,7 @@ class UnifiedMLP(object):
         X, X_train, Y, Y_train = train_test_split(
             X, Y, test_size=split[0], random_state=split_randint)
 
-        X, X_validate, Y, Y_validate = train_test_split(
+        X, X_valid, Y, Y_valid = train_test_split(
             X, Y, test_size=split[1] / (split[1] + split[2] + leftover),
             random_state=split_randint)
 
@@ -209,10 +220,10 @@ class UnifiedMLP(object):
         # Train the normaliser on training data only
         normaliser = preprocessing.StandardScaler().fit(X_train)
         X_train = normaliser.transform(X_train)
-        X_validate = normaliser.transform(X_validate)
+        X_valid = normaliser.transform(X_valid)
         X_test = normaliser.transform(X_test)
 
-        return X_train, X_validate, X_test, Y_train, Y_validate, Y_test
+        return X_train, X_valid, X_test, Y_train, Y_valid, Y_test
 
     def _validate_settings(self):
         ''' Some basic compatibility checks between settings. Doesn't check
@@ -425,9 +436,10 @@ class UnifiedMLP(object):
 
             loss_curve.append(history.history['loss'][1])
 
-            valid_proba = keras_nn.predict_proba(self.X_validate, verbose=0)
-            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
-            valid_curve.append(valid_score)
+            valid_proba = keras_nn.predict_proba(self.X_valid, verbose=0)
+            valid_predict = self._predict_from_proba(valid_proba)
+            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
+            valid_curve.append(valid_accuracy)
 
             #############################
             #  Check stopping criteria  #
@@ -442,15 +454,14 @@ class UnifiedMLP(object):
                 break
 
         test_proba = keras_nn.predict_proba(self.X_test, verbose=0)
-        score = self._score_from_proba(test_proba, self.Y_test)
+        test_predict = self._predict_from_proba(test_proba)
+        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
-        return score, loss_curve, valid_curve, keras_nn
+        return test_accuracy, loss_curve, valid_curve, keras_nn
 
     @staticmethod
-    def _score_from_proba(proba, Y, thres=0.5):
-        predictions = (proba > thres)
-        score = (predictions == Y).mean()
-        return score
+    def _predict_from_proba(proba, thres=0.5):
+        return (proba > thres)
 
     def _sklearn(self):
 
@@ -508,9 +519,10 @@ class UnifiedMLP(object):
             learning_rate *= (1.0 - self._iter_hypers['learning_decay'])
             sklearn_nn.set_params(learning_rate_init=learning_rate)
 
-            valid_proba = sklearn_nn.predict_proba(self.X_validate)
-            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
-            valid_curve.append(valid_score)
+            valid_proba = sklearn_nn.predict_proba(self.X_valid)
+            valid_predict = self._predict_from_proba(valid_proba)
+            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
+            valid_curve.append(valid_accuracy)
 
             #############################
             #  Check stopping criteria  #
@@ -525,9 +537,10 @@ class UnifiedMLP(object):
                 break
 
         test_proba = sklearn_nn.predict_proba(self.X_test)
-        score = self._score_from_proba(test_proba, self.Y_test)
+        test_predict = self._predict_from_proba(test_proba)
+        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
-        return score, loss_curve, valid_curve, sklearn_nn
+        return test_accuracy, loss_curve, valid_curve, sklearn_nn
 
     def _sknn(self):
 
@@ -621,9 +634,10 @@ class UnifiedMLP(object):
 
             # NOTE: predict_proba returns 2 entries per binary class, which are
             # True and False, adding to 1.0. We take the probability of True.
-            valid_proba = sknn_nn.predict_proba(self.X_validate)[:, 1::2]
-            valid_score = self._score_from_proba(valid_proba, self.Y_validate)
-            valid_curve.append(valid_score)
+            valid_proba = sknn_nn.predict_proba(self.X_valid)[:, 1::2]
+            valid_predict = self._predict_from_proba(valid_proba)
+            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_proba)
+            valid_curve.append(valid_accuracy)
 
             # Use change in loss_curve to evaluate stability
             if self._converged(loss_curve, n_loss):
@@ -635,28 +649,10 @@ class UnifiedMLP(object):
                 break
 
         predict_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
-        score = self._score_from_proba(predict_proba, self.Y_test)
+        test_predict = self._predict_from_proba(test_proba)
+        test_accuracy, test_F1 = getScores(self.Y_valid, test_predict)
 
-        return score, loss_curve, valid_curve, sknn_nn
-
-    def _get_score(self, predictions, answers):
-        ''' Returns the F1 score and simple score (percent correct).
-            Requires predictions and answers in 0 and 1 int or bool format.
-        '''
-        predicted_positives = (predictions == 1)
-        # print predicted_positives
-        # print answers
-        true_positives = (predicted_positives & answers)
-        false_positives = (predicted_positives & np.logical_not(answers))
-        correct_predictions = (predictions == answers)
-
-        precision = float(true_positives.sum()) / predicted_positives.sum()
-        recall = float(true_positives.sum()) / answers.sum()
-        F1 = (2 * precision * recall) / (precision + recall)
-        score = float(correct_predictions.sum()) / \
-            (predictions.shape[0] * predictions.shape[1])
-
-        return F1, score
+        return test_accuracy, loss_curve, valid_curve, sknn_nn
 
     def _converged(self, objective, n_objective):
         ''' Inputs:
@@ -733,3 +729,67 @@ class _SKL_Multilabel_MLP(SKL_MLP):
         proba = super(_SKL_Multilabel_MLP, self).predict_proba(X)
         return proba*self.n_labels
 
+class _StratifiedRandomClassifier(object):
+    ''' Benchmarking classifier with consistent behaviour.
+
+    Randomly assigns class predictions with the correct balance of True and
+    False predictions per class. Deterministic: there is no variance in the
+    accuracy of the answers to the same problem. In other words, the
+    classification accuracy is equal to the expected value of the
+    accuracy in scikit-learn's DummyClassifier(strategy='stratified')
+    '''
+
+    def fit(self, X, Y):
+        self.weights = Y.mean(axis=0)
+        return self
+
+    def accuracy(self, X):
+        ''' Analytically assess the expected accuracy.
+
+        accuracy = correct_predictions/all_predictions
+        '''
+
+        return (self.weights**2 + (1.0 - self.weights)**2).mean()
+
+    def predict(self, X, Y):
+        ''' Peeks at the correct answer in order to assign predictions which
+            exactly match the expected quality of predictions.
+        '''
+
+        n_samples, n_classes = Y.shape
+        predictions = np.zeros([n_samples, n_classes], dtype=bool)
+
+        for i_class in range(n_classes):
+
+            weight = self.weights[i_class]
+
+            true_idxs = np.where(Y[:, i_class] == True)
+            false_idxs = np.where(Y[:, i_class] == False)
+
+            n_true = true_idxs[0].shape[0]
+            n_false = false_idxs[0].shape[0]
+
+            n_true_assign_true = int(weight*n_true)
+            n_false_assign_true = int(weight*n_false)
+
+            predictions[true_idxs[0][:n_true_assign_true], i_class] = True
+            predictions[false_idxs[0][:n_false_assign_true], i_class] = True
+
+        return predictions
+
+def getScores(answers, predictions):
+    ''' Returns the F1 score and simple score (percent correct).
+        Requires predictions and answers in 0 and 1 int or bool format.
+    '''
+    predicted_positives = (predictions == 1)
+    true_positives = (predicted_positives & answers)
+    false_positives = (predicted_positives & np.logical_not(answers))
+    correct_predictions = (predictions == answers)
+
+    precision = float(true_positives.sum()) / predicted_positives.sum()
+    recall = float(true_positives.sum()) / answers.sum()
+    F1 = (2 * precision * recall) / (precision + recall)
+    accuracy = float(correct_predictions.sum()) / \
+        (predictions.shape[0] * predictions.shape[1])
+
+    return accuracy, F1
