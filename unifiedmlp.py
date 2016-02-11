@@ -57,6 +57,7 @@ class UnifiedMLP(object):
     """
 
     _default_hypers = {
+        'module': 'keras',
         ##################
         #  Architecture  #
         ##################
@@ -250,15 +251,8 @@ class UnifiedMLP(object):
         self._validate_settings()
         return self
 
-    def run_test(self, module='keras'):
+    def run_test(self):
         """ Build, train and test a neural network architecture.
-
-        Parameters
-        ----------
-
-        module : string
-            Which Python module to build the neural network in.
-            One of 'sklearn', 'sknn', or 'keras'.
 
         Returns
         -------
@@ -267,21 +261,16 @@ class UnifiedMLP(object):
             Stores results of the test. :ref:`test-dict`.
         """
 
+        module = self.get_hypers()['module']
+
         modules = {
             'sklearn': self._sklearn,
             'sknn': self._sknn,
             'keras': self._keras
         }
 
-        test = {
-            'module': module,
-            'hypers': self.get_hypers()
-        }
-
-        F_score = 0.0
-        percent_score = 0.0
-
         training, performance, model = modules[module]()
+        test = {'hypers': self.get_hypers()}
         test['training'] = {'loss': training[0],
                             'accuracy': training[1],
                             'F1': training[2]}
@@ -445,10 +434,9 @@ class UnifiedMLP(object):
 
         valid_keys = [
             'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
-            'learning_rate', 'max_iter', 'random_state', 'shuffle', 'tol',
-            'learning_rate_init', 'power_t', 'verbose', 'warm_start',
-            'momentum', 'nesterovs_momentum', 'validation_fraction',
-            'beta_1', 'beta_2', 'epsilon', 'algorithm'
+            'max_iter', 'random_state', 'shuffle', 'learning_rate_init',
+            'verbose', 'warm_start', 'momentum', 'nesterovs_momentum', 'beta_1',
+            'beta_2', 'epsilon', 'algorithm'
         ]
 
         sklearn_settings = {key: val for key, val in self._nn_hypers.items()
@@ -616,7 +604,7 @@ class UnifiedMLP(object):
 
         test_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1 = getScores(self.Y_valid, test_predict)
+        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
         training = (loss_curve, accuracy_curve, F1_curve)
         performance = (test_accuracy, test_F1)
