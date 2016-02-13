@@ -19,8 +19,6 @@ from sklearn.neural_network import MLPClassifier as SKL_MLP
 from sknn.mlp import Classifier as sknn_MLPClassifier, Layer
 
 import numpy as np
-# NOTE: This is the only simple way to get reproducable results in Keras.
-np.random.seed(1)
 
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation
@@ -58,10 +56,11 @@ class UnifiedMLP(object):
 
     _default_hypers = {
         'module': 'keras',
+        'frac_training' : 1.0,
         ##################
         #  Architecture  #
         ##################
-        'hidden_layer_sizes': (15,),
+        'hidden_layer_size': 15, # !!
         'activation': 'relu',
 
         ####################
@@ -86,20 +85,6 @@ class UnifiedMLP(object):
         'beta_2': 0.999,
         'epsilon': 1e-8,
 
-        #######################
-        #  Consistent output  # (for developing and debugging)
-        #######################
-        # Doesn't work in Keras (there's a hack though -- see the imports)
-        'random_state': 1,
-
-        ####################################################
-        #  Iteration/epoch settings - don't change these!  #
-        ####################################################
-        'warm_start': True,
-        # In scikit-learn (and sknn), "iter" really means epoch.
-        'max_iter': 1,
-        'learning_rate': 'constant',
-
         ###############################################
         #  Iteration/epoch settings - can be changed  #
         ###############################################
@@ -118,6 +103,19 @@ class UnifiedMLP(object):
         # Terminate before the loss stops improving if the accuracy score
         # on the validation stops improving. Uses epoch_tol and n_stable.
         'early_stopping': True,
+
+        #######################
+        #  Consistent output  # (for developing and debugging)
+        #######################
+        'random_state': 1,
+
+        ####################################################
+        #  Iteration/epoch settings - don't change these!  #
+        ####################################################
+        'warm_start': True,
+        # In scikit-learn (and sknn), "iter" really means epoch.
+        'max_iter': 1,
+        'learning_rate': 'constant',
     }
 
     # For settings which take a categorical value, provided is a dict of
@@ -249,7 +247,7 @@ class UnifiedMLP(object):
 
         # Not all modules can take numbers that aren't of a builtin type
         for key in new_settings.keys():
-            if type(new_settings[key]).__module__ == 'numpy':
+            if type(new_settings[key]) == 'numpy.float64':
                 new_settings[key] = float(new_settings[key])
 
         self._nn_hypers.update(new_settings)
@@ -262,8 +260,8 @@ class UnifiedMLP(object):
         Returns
         -------
 
-        test : dict
-            Stores results of the test. :ref:`test-dict`.
+        results : dict
+            Stores results of the test. :ref:`results-dict`.
         """
 
         module = self.get_hypers()['module']
@@ -275,19 +273,20 @@ class UnifiedMLP(object):
         }
 
         training, performance, model = modules[module]()
-        test = {'hypers': self.get_hypers()}
-        test['training'] = {'loss': training[0],
-                            'accuracy': training[1],
-                            'F1': training[2]}
-        test['performance'] = {'accuracy': performance[0],
-                               'F1': performance[1]}
-        test['model'] = model
+        results = {'hypers': self.get_hypers()}
+        results['training'] = {'loss': training[0],
+                               'accuracy': training[1],
+                               'F1': training[2]}
+        results['performance'] = {'accuracy': performance[0],
+                                  'F1': performance[1]}
 
-        self.tests.append(test)
+        self.tests.append(results)
 
-        return test
+        return results, model
 
     def _keras(self):
+
+        np.random.seed(self._nn_hypers['random_state'])
 
         #########################
         #  Settings conversion  #
@@ -318,7 +317,7 @@ class UnifiedMLP(object):
         keras_nn = Sequential()
 
         keras_nn.add(Dense(
-            self._nn_hypers['hidden_layer_sizes'][0],
+            self._nn_hypers['hidden_layer_size'],
             input_dim=self.n_features,
             init='lecun_uniform',
             W_regularizer=l2(self._nn_hypers['alpha']),
@@ -368,11 +367,14 @@ class UnifiedMLP(object):
         n_valid = [0]
         stop_reason = 0
 
+        X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
+                                           self.X_train, self.Y_train)
+
         for i in range(self._nn_hypers['max_epoch']):
             n_epoch[0] = i
 
             history = keras_nn.fit(
-                self.X_train, self.Y_train,
+                X_train, Y_train,
                 nb_epoch=10,
                 batch_size=self._nn_hypers['batch_size'],
                 verbose=0,
@@ -434,16 +436,17 @@ class UnifiedMLP(object):
             raise KeyError(err_str)
 
         valid_keys = [
-            'hidden_layer_sizes', 'activation', 'alpha', 'batch_size',
-            'max_iter', 'random_state', 'shuffle', 'learning_rate_init',
-            'verbose', 'warm_start', 'momentum', 'nesterovs_momentum', 'beta_1',
-            'beta_2', 'epsilon', 'algorithm'
+            'activation', 'alpha', 'batch_size', 'max_iter', 'random_state',
+            'shuffle', 'learning_rate_init', 'verbose', 'warm_start',
+            'momentum', 'nesterovs_momentum', 'beta_1', 'beta_2', 'epsilon',
+            'algorithm'
         ]
 
         sklearn_settings = {key: val for key, val in self._nn_hypers.items()
                             if key in valid_keys}
 
         sklearn_settings.update({'n_labels': self.n_labels_sklearn})
+        sklearn_settings.update({'hidden_layer_sizes': (self._nn_hypers['hidden_layer_size'])})
 
         ###############
         #  Create NN  #
@@ -465,8 +468,11 @@ class UnifiedMLP(object):
 
         learning_rate = self._nn_hypers['learning_rate_init']
 
+        X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
+                                           self.X_train, self.Y_train)
+
         for i in range(self._nn_hypers['max_epoch']):
-            sklearn_nn.fit(self.X_train, self.Y_train)
+            sklearn_nn.fit(X_train, Y_train)
             loss_curve = sklearn_nn.loss_curve_  # sklearn itself keeps a list across fits
 
             learning_rate *= (1.0 - self._nn_hypers['learning_decay'])
@@ -547,7 +553,7 @@ class UnifiedMLP(object):
         sknn_nn = sknn_MLPClassifier(
 
             # Architecture
-            layers=[Layer(activation, units=self._nn_hypers['hidden_layer_sizes'][0],),
+            layers=[Layer(activation, units=self._nn_hypers['hidden_layer_size'],),
                     Layer("Softmax", units=2 * self.n_classes)],
 
             # Learning settings
@@ -581,8 +587,11 @@ class UnifiedMLP(object):
         n_valid = [0]
         stop_reason = 0
 
+        X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
+                                           self.X_train, self.Y_train)
+
         for i in range(self._nn_hypers['max_epoch']):
-            sknn_nn.fit(self.X_train, self.Y_train)
+            sknn_nn.fit(X_train, Y_train)
             loss_curve.append(batch_loss[0])
 
             # NOTE: predict_proba returns 2 entries per binary class, which are
@@ -611,6 +620,14 @@ class UnifiedMLP(object):
         performance = (test_accuracy, test_F1)
 
         return training, performance, sknn_nn
+
+    @staticmethod
+    def _trim_data(frac, X, Y):
+
+        n_samples = X.shape[0]
+        n_trimmed_samples = int(round(n_samples*frac))
+
+        return X[:n_trimmed_samples], Y[:n_trimmed_samples]
 
     def _converged(self, objective, n_objective):
         ''' Inputs:

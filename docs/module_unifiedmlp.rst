@@ -11,7 +11,7 @@ Quickstart:
 * Run :mod:`set_iter_hypers` and :mod:`set_nn_hypers` to specify non-default hyperparameters of the neural network.
 * Run :mod:`run_test` to perform a fitting. Returns a dict with fitting history and performance measures.
 
-Please review the :doc:`hyperparameters reference guide<../settings_reference>` to learn about the arguments found in the getters and setters here.
+Please also check the :doc:`hyperparameters reference guide<../settings_reference>`.
 
 Class reference
 ---------------
@@ -20,9 +20,9 @@ Class reference
 .. autoclass:: UnifiedMLP
     :members:
 
-.. _test-dict:
+.. _results-dict:
 
-Test dict reference
--------------------
+Results dict reference
+----------------------
 
 Hello

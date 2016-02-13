@@ -17,6 +17,6 @@ Contents:
     tutorial
     settings_reference
     module_unifiedmlp
-    module_hyperparam_sweep
+    module_hypersearch
 
 
