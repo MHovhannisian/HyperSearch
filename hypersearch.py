@@ -215,6 +215,14 @@ class HyperSearch(object):
 
         # TODO need preprocesing step to replace string values with float
         # then substitute back later.
+        # If we are dealing with continuous (non-categorical) data, this
+        # operation will succeed.
+        try:
+            x[0] - 1.0
+            categories = []
+        except TypeError:
+            categories = list(x)
+            x = range(len(categories))
 
         # Set up multi-line plotting
         if lines:
@@ -245,9 +253,12 @@ class HyperSearch(object):
                 label = "MLP"
 
             if y:
-                print x
-                print y
-                plt.plot(x, y, label=label)
+                if categories:
+                    # Use dummy numerical system without lines to plot category
+                    plt.plot(x, y, 'o--', label=label)
+                    plt.xticks(x,categories)
+                else:
+                    plt.plot(x, y, label=label)
             y = []
 
         bench = self.MLP.benchmark['accuracy']
@@ -307,19 +318,20 @@ class HyperSearch(object):
 
 
 if __name__ == "__main__":
-    data_file = "data_top5.pickle"
-    with open(data_file, 'r') as datafile:
-        pd_df = pickle.load(datafile)
+    # data_file = "data_top5.pickle"
+    # with open(data_file, 'r') as datafile:
+        # pd_df = pickle.load(datafile)
 
-    X = pd_df.ix[:, 0:13]
-    Ys = pd_df.ix[:, 15:25]
+    # X = pd_df.ix[:, 0:13]
+    # Ys = pd_df.ix[:, 15:25]
 
-    hs = HyperSearch(X, Ys)
-    hs.save().set_fixed(max_epoch=50, algoithm='adam', module='sklearn')
-    hs.set_search(frac_training=np.arange(0.1, 1.1, 0.2),
-                  alpha=(0.01, 0.02),
-                  hidden_layer_size=range(5, 21, 5))
-    hs.run_tests().save()
+    # hs = HyperSearch(X, Ys)
+    # hs.save().set_fixed(max_epoch=50, algorithm='adam', module='sklearn')
+    # hs.set_search(frac_training=np.arange(0.1, 1.1, 0.2),
+                  # alpha=(0.01, 0.02),
+                  # algorithm=['adam','sgd'],
+                  # hidden_layer_size=range(5, 21, 5))
+    # hs.run_tests().save()
 
     hs = HyperSearch.load()
-    hs.graph2D(x_axis='hidden_layer_size', lines=['frac_training', 'alpha'])
+    hs.graph2D(x_axis='algorithm', lines=['frac_training', 'alpha'])
