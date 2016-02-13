@@ -223,7 +223,7 @@ class HyperSearch(object):
             line_val_ars = [self._dim_vals[lines_dim] for lines_dim in lines_dims]
             line_group_idxs = list(itertools.product(*line_idx_ars))
             line_group_vals = list(itertools.product(*line_val_ars))
-        # Otherwise just set dummy value
+        # Otherwise just set dummy value.
         else:
             line_group_idxs = [(0,)]
 
@@ -240,7 +240,7 @@ class HyperSearch(object):
                 y.append(result['performance'][y_axis])
 
             if lines:
-                label = "{0}: {1}".format(lines, line_group_vals[i_line])
+                label = self._line_label(lines, line_group_vals[i_line])
             else:
                 label = "MLP"
 
@@ -296,20 +296,30 @@ class HyperSearch(object):
 
         return fixed_coords
 
+    @staticmethod
+    def _line_label(hyperparam_names, hyperparam_values):
+        label = "{0}: {1}".format(hyperparam_names[0], hyperparam_values[0])
+
+        for i in range(1, len(hyperparam_names)):
+            label += "; {0}: {1}".format(hyperparam_names[i], hyperparam_values[i])
+
+        return label
+
 
 if __name__ == "__main__":
-    # data_file = "data_top5.pickle"
-    # with open(data_file, 'r') as datafile:
-        # pd_df = pickle.load(datafile)
+    data_file = "data_top5.pickle"
+    with open(data_file, 'r') as datafile:
+        pd_df = pickle.load(datafile)
 
-    # X = pd_df.ix[:, 0:13]
-    # Ys = pd_df.ix[:, 15:25]
+    X = pd_df.ix[:, 0:13]
+    Ys = pd_df.ix[:, 15:25]
 
-    # hs = HyperSearch(X, Ys)
-    # hs.save().set_fixed(max_epoch=50, algoithm='adam', module='sklearn')
-    # hs.set_search(frac_training=np.arange(0.1, 1.1, 0.1),
-                  # hidden_layer_size=range(5, 21, 5))
-    # hs.run_tests().save()
+    hs = HyperSearch(X, Ys)
+    hs.save().set_fixed(max_epoch=50, algoithm='adam', module='sklearn')
+    hs.set_search(frac_training=np.arange(0.1, 1.1, 0.2),
+                  alpha=(0.01, 0.02),
+                  hidden_layer_size=range(5, 21, 5))
+    hs.run_tests().save()
 
     hs = HyperSearch.load()
-    hs.graph2D(x_axis='hidden_layer_size', frac_training=0.3)
+    hs.graph2D(x_axis='hidden_layer_size', lines=['frac_training', 'alpha'])
