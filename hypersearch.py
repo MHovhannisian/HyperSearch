@@ -29,7 +29,7 @@ class HyperSearch(object):
         self.fixed = False
         self.search = False
 
-        self.performance = ['F1', 'accuracy', 'time_taken']
+        self.performance = ['F1', 'accuracy', 'time']
 
     def set_fixed(self, **hypers):
         assert(not self.fixed)
@@ -274,8 +274,12 @@ class HyperSearch(object):
 
             y = []
 
-        bench = self.MLP.benchmark[y_axis]
-        plt.plot([0, ymaxlen - 1], [bench, bench], '-.', label="Stratified Random")
+        try:
+            bench = self.MLP.benchmark[y_axis]
+            plt.plot([0, ymaxlen - 1], [bench, bench], '-.', label="Stratified Random")
+        except KeyError:
+            pass
+
         plt.xlabel("Epoch")
         plt.ylabel(y_axis)
 
@@ -377,8 +381,12 @@ class HyperSearch(object):
 
             x, y = [], []
 
-        bench = self.MLP.benchmark[y_axis]
-        plt.plot([x_master[0],x_master[-1]], [bench, bench], '-.', label="Stratified Random")
+        try:
+            bench = self.MLP.benchmark[y_axis]
+            plt.plot([x_master[0],x_master[-1]], [bench, bench], '-.', label="Stratified Random")
+        except KeyError:
+            pass
+
         plt.xlabel(x_axis)
         plt.ylabel(y_axis)
 
@@ -440,6 +448,8 @@ class HyperSearch(object):
 
         return label
 
+    def show(self):
+        ''' Summarise the HyperSearch instance. '''
 
 if __name__ == "__main__":
     # data_file = "data_top5.pickle"
@@ -459,6 +469,6 @@ if __name__ == "__main__":
     # hs.run_tests(ignore_failure=True).save()
 
     hs = HyperSearch.load()
-    # hs.graph(x_axis='frac_training', lines=['dropout', 'module'], algorithm='sgd')
-    hs.graph(x_axis='frac_training', y_axis='dropout')
+    hs.graph(x_axis='epoch', y_axis='time', lines=['dropout', 'module'], algorithm='sgd')
+    # hs.graph(x_axis='frac_training', y_axis='dropout')
     # hs.graph(x_axis='dropout')

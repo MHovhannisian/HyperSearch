@@ -9,6 +9,7 @@ This interface is modelled on the scikit-learn interface.
 
 import warnings
 import math
+import timeit
 
 from sklearn.cross_validation import KFold, train_test_split
 from sklearn import preprocessing
@@ -92,7 +93,7 @@ class UnifiedMLP(object):
         'max_epoch': 3,
 
         # Max decline in loss between epochs to consider converged. (Ratio)
-        'epoch_tol': 0.02,
+        'epoch_tol': 0.001,
 
         # Number of consecutive epochs considered converged before stopping.
         'n_stable': 3,
@@ -278,11 +279,15 @@ class UnifiedMLP(object):
 
         training, performance, model = modules[module]()
         results = {'hypers': self.get_hypers()}
-        results['training'] = {'loss': training[0],
-                               'accuracy': training[1],
-                               'F1': training[2]}
-        results['performance'] = {'accuracy': performance[0],
-                                  'F1': performance[1]}
+        results['training'] = { 'loss': training[0],
+                                'accuracy': training[1],
+                                'F1': training[2],
+                                'time': training[3]
+                              }
+        results['performance'] = { 'accuracy': performance[0],
+                                   'F1': performance[1],
+                                   'time': performance[2]
+                                 }
 
         self.tests.append(results)
 
@@ -367,6 +372,8 @@ class UnifiedMLP(object):
         loss_curve = []
         accuracy_curve = []
         F1_curve = []
+        time_curve = []
+
         n_loss = [0]
         n_valid = [0]
         stop_reason = 0
@@ -377,6 +384,8 @@ class UnifiedMLP(object):
         for i in range(self._nn_hypers['max_epoch']):
             n_epoch[0] = i
 
+            time_curve.append(-timeit.default_timer())
+
             history = keras_nn.fit(
                 X_train, Y_train,
                 nb_epoch=10,
@@ -384,6 +393,8 @@ class UnifiedMLP(object):
                 verbose=0,
                 callbacks=[LearningRateScheduler(learning_schedule)]
             )
+
+            time_curve[i] += timeit.default_timer()
 
             ####################
             #  Track progress  #
@@ -413,8 +424,8 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve)
-        performance = (test_accuracy, test_F1)
+        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
+        performance = (test_accuracy, test_F1, np.mean(time_curve))
 
         return training, performance, keras_nn
 
@@ -461,10 +472,11 @@ class UnifiedMLP(object):
         #  Train NN  #
         ##############
 
-        # Tracking for stopping criteria and output
         loss_curve = []
         F1_curve = []
         accuracy_curve = []
+        time_curve = []
+
         n_loss = [0]
         n_valid = [0]
         stop_reason = 0
@@ -476,7 +488,11 @@ class UnifiedMLP(object):
 
         for i in range(self._nn_hypers['max_epoch']):
             try:
+                time_curve.append(-timeit.default_timer())
+
                 sklearn_nn.fit(X_train, Y_train)
+
+                time_curve[i] += timeit.default_timer()
             except ValueError as e:
                 raise KeyError(e.message)
 
@@ -508,8 +524,8 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve)
-        performance = (test_accuracy, test_F1)
+        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
+        performance = (test_accuracy, test_F1, np.mean(time_curve))
 
         return training, performance, sklearn_nn
 
@@ -590,6 +606,8 @@ class UnifiedMLP(object):
         loss_curve = []
         accuracy_curve = []
         F1_curve = []
+        time_curve = []
+
         n_loss = [0]
         n_valid = [0]
         stop_reason = 0
@@ -598,7 +616,11 @@ class UnifiedMLP(object):
                                            self.X_train, self.Y_train)
 
         for i in range(self._nn_hypers['max_epoch']):
+            time_curve.append(-timeit.default_timer())
+
             sknn_nn.fit(X_train, Y_train)
+
+            time_curve[i] += timeit.default_timer()
             loss_curve.append(batch_loss[0])
 
             # NOTE: predict_proba returns 2 entries per binary class, which are
@@ -623,8 +645,8 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve)
-        performance = (test_accuracy, test_F1)
+        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
+        performance = (test_accuracy, test_F1, np.mean(time_curve))
 
         return training, performance, sknn_nn
 
