@@ -220,7 +220,7 @@ class UnifiedMLP(object):
         '''
 
         if self._nn_hypers['algorithm'] != 'sgd' and self._nn_hypers['learning_decay'] != 0.0:
-            raise ValueError(
+            raise KeyError(
                 "The learning_decay option is for the sgd algorithm only.")
 
     def get_hypers(self):
@@ -256,6 +256,8 @@ class UnifiedMLP(object):
 
     def run_test(self):
         """ Build, train and test a neural network architecture.
+
+        Guarentee: If incompatible settings are passed, ``KeyError`` is raised.
 
         Returns
         -------
@@ -472,7 +474,11 @@ class UnifiedMLP(object):
                                            self.X_train, self.Y_train)
 
         for i in range(self._nn_hypers['max_epoch']):
-            sklearn_nn.fit(X_train, Y_train)
+            try:
+                sklearn_nn.fit(X_train, Y_train)
+            except ValueError as e:
+                raise KeyError(e.message)
+
             loss_curve = sklearn_nn.loss_curve_  # sklearn itself keeps a list across fits
 
             learning_rate *= (1.0 - self._nn_hypers['learning_decay'])

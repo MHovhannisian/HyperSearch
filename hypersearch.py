@@ -49,14 +49,14 @@ class HyperSearch(object):
 
         self.results = np.empty(self._dims, dtype=object)
         self.ran = np.zeros(self._dims, dtype=bool)
-        self.success = np.zeros(self._dims, dtype=bool)
+        self.success = np.ones(self._dims, dtype=bool)
 
         self.accuracy = np.empty(self._dims, dtype=float)
         self.F1 = np.empty(self._dims, dtype=float)
 
         return self
 
-    def run_tests(self):
+    def run_tests(self, ignore_failure=False):
         try:
             assert (self.search)
         except AssertionError:
@@ -76,19 +76,23 @@ class HyperSearch(object):
                                     for j, coord in enumerate(coordinates)}
             self.MLP.set_hypers(**this_settings)
 
-            # try:
-            result, _ = self.MLP.run_test()
-            self.success[coordinates] = True
-            # except KeyError: # When unspported settings are specified
-                # self.success[coordinates] = False
-            # finally:
-            self.ran[coordinates] = True
+            try:
+                result, _ = self.MLP.run_test()
+                self.success[coordinates] = True
 
-            self.results[coordinates] = result
-            self.accuracy[coordinates] = result['performance']['accuracy']
-            self.F1[coordinates] = result['performance']['F1']
+                self.results[coordinates] = result
+                self.accuracy[coordinates] = result['performance']['accuracy']
+                self.F1[coordinates] = result['performance']['F1']
 
-            self.save()
+                self.save()
+
+            except KeyError: # When unspported settings are specified
+                if ignore_failure:
+                    self.success[coordinates] = False
+                else:
+                    raise
+            finally:
+                self.ran[coordinates] = True
 
             bar.update(i+1)
 
@@ -187,14 +191,13 @@ class HyperSearch(object):
         y_axis : str
             Name of performance measure to plot on the y-axis.
 
-        lines : str
+        lines : list of str
             Seperate lines will be plotted for each value of this hyperparameter.
-            NOT IMPLEMENTED YET.
 
         vals : dict
-            Fixed values to use when taking slice. If a fixed value is not 
-            specified, the global maximum of the accuracy score will be
-            found and the corresponding value of the hyperparam will be used.
+            Fixed values to use when taking slice. If a fixed value is not
+            specified, the global maximum of the accuracy score will be found
+            and the corresponding value of the hyperparameter will be used.
         '''
 
         try:
@@ -210,19 +213,16 @@ class HyperSearch(object):
         self._warn_autoset_coords([x_axis]+vals.keys()+lines, coords)
 
         x_axis_dim = self._dim_names.index(x_axis)
-        x = self._dim_vals[x_axis_dim]
-        y = []
+        x_master = self._dim_vals[x_axis_dim]
+        x, y = [], []
 
-        # TODO need preprocesing step to replace string values with float
-        # then substitute back later.
-        # If we are dealing with continuous (non-categorical) data, this
-        # operation will succeed.
+        # Deal with categorical (non-numeric) x axis
         try:
-            x[0] - 1.0
+            x_master[0] - 1.0
             categories = []
         except TypeError:
-            categories = list(x)
-            x = range(len(categories))
+            categories = list(x_master)
+            x_master = range(len(categories))
 
         # Set up multi-line plotting
         if lines:
@@ -235,34 +235,42 @@ class HyperSearch(object):
         else:
             line_group_idxs = [(0,)]
 
-        # Plot
+        # Plotting loop
         for i_line, line_group_idx in enumerate(line_group_idxs):
 
+            # Set coords specific to this line
             if lines:
                 for i_idx, idx in enumerate(line_group_idx):
                     coords[lines_dims[i_idx]] = idx
 
-            for i in range(len(x)):
+            # Step along coords of the x-axis and set y values.
+            for i in range(len(x_master)):
                 coords[x_axis_dim] = i
-                result = self.results[tuple(coords)]
-                y.append(result['performance'][y_axis])
+                if self.success[tuple(coords)]:
+                    result = self.results[tuple(coords)]
+                    y.append(result['performance'][y_axis])
+                    x.append(x_master[i])
 
             if lines:
                 label = self._line_label(lines, line_group_vals[i_line])
             else:
                 label = "MLP"
 
+            # Plot
             if y:
                 if categories:
-                    # Use dummy numerical system without lines to plot category
+                    # Dummy numerical system with dashed lines
                     plt.plot(x, y, 'o--', label=label)
-                    plt.xticks(x,categories)
+                    plt.xticks(x_master, categories)
                 else:
+                    print len(x)
+                    print len(y)
                     plt.plot(x, y, label=label)
-            y = []
 
-        bench = self.MLP.benchmark['accuracy']
-        plt.plot([x[0],x[-1]], [bench, bench], label="Stratified Random")
+            x, y = [], []
+
+        bench = self.MLP.benchmark[y_axis]
+        plt.plot([x_master[0],x_master[-1]], [bench, bench], label="Stratified Random")
         plt.xlabel(x_axis)
         plt.ylabel(y_axis)
 
@@ -309,6 +317,7 @@ class HyperSearch(object):
 
     @staticmethod
     def _line_label(hyperparam_names, hyperparam_values):
+        ''' Produce label differentiating lines in a 2D graph. '''
         label = "{0}: {1}".format(hyperparam_names[0], hyperparam_values[0])
 
         for i in range(1, len(hyperparam_names)):
@@ -318,20 +327,20 @@ class HyperSearch(object):
 
 
 if __name__ == "__main__":
-    # data_file = "data_top5.pickle"
-    # with open(data_file, 'r') as datafile:
-        # pd_df = pickle.load(datafile)
+    data_file = "data_top5.pickle"
+    with open(data_file, 'r') as datafile:
+        pd_df = pickle.load(datafile)
 
-    # X = pd_df.ix[:, 0:13]
-    # Ys = pd_df.ix[:, 15:25]
+    X = pd_df.ix[:, 0:13]
+    Ys = pd_df.ix[:, 15:25]
 
-    # hs = HyperSearch(X, Ys)
-    # hs.save().set_fixed(max_epoch=50, algorithm='adam', module='sklearn')
-    # hs.set_search(frac_training=np.arange(0.1, 1.1, 0.2),
-                  # alpha=(0.01, 0.02),
-                  # algorithm=['adam','sgd'],
-                  # hidden_layer_size=range(5, 21, 5))
-    # hs.run_tests().save()
+    hs = HyperSearch(X, Ys)
+    hs.save().set_fixed(max_epoch=10)
+    hs.set_search(module=['sklearn', 'sknn'],
+                  algorithm=['adam','adadelta', 'sgd'],
+                  frac_training=np.arange(0.1,1.1,0.1)
+                 )
+    hs.run_tests(ignore_failure=True).save()
 
     hs = HyperSearch.load()
-    hs.graph2D(x_axis='algorithm', lines=['frac_training', 'alpha'])
+    hs.graph2D(x_axis='algorithm', lines=['module'])
