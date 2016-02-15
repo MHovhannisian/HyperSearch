@@ -245,9 +245,11 @@ class UnifiedMLP(object):
         self
         '''
 
-        # Not all modules can take numbers that aren't of a builtin type
+        # Modules often choke on numpy-type floats
         for key in new_settings.keys():
-            if type(new_settings[key]) == 'numpy.float64':
+            if type(new_settings[key]) == np.float64 or\
+                    type(new_settings[key]) == np.float32:
+
                 new_settings[key] = float(new_settings[key])
 
         self._nn_hypers.update(new_settings)
@@ -300,7 +302,7 @@ class UnifiedMLP(object):
             activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
             err_str = "Activation function \"" + self._nn_hypers['activation']
-            err_str += "\" not supported in Keras."
+            err_str += "\" unsupported."
             raise KeyError(err_str)
 
         # Callback for SGD learning rate decline
@@ -353,7 +355,7 @@ class UnifiedMLP(object):
             optimiser = Adadelta()  # Recommended to use the default values
         else:
             err_str = "Learning algorithm \"" + self._nn_hypers['algorithm']
-            err_str += "\" not implemented in Keras at present."
+            err_str += "\" not implemented."
             raise KeyError(err_str)
 
         keras_nn.compile(loss='binary_crossentropy', optimizer=optimiser)
@@ -430,12 +432,11 @@ class UnifiedMLP(object):
         bad_settings = [self._nn_hypers[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
-            err_str = "The following unsupported settings are not set to 0.0:\n"
+            err_str = "Unsupported settings: "
             for i, key in enumerate(unsupported_keys):
                 if bad_settings[i]:
-                    err_str += "\t" + key + ": " + \
-                        str(self._nn_hypers[key]) + "\n"
-            raise KeyError(err_str)
+                    err_str += key + ", "
+            raise KeyError(err_str[:-2])
 
         valid_keys = [
             'activation', 'alpha', 'batch_size', 'max_iter', 'random_state',
@@ -524,7 +525,7 @@ class UnifiedMLP(object):
             activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
             err_str = "Activation function \"" + self._nn_hypers['activation']
-            err_str += "\" not supported in SKNN."
+            err_str += "\" not supported."
             raise KeyError(err_str)
 
         if self._nn_hypers['algorithm'] == 'sgd':
@@ -538,11 +539,11 @@ class UnifiedMLP(object):
             learning_rule = 'adadelta'
         else:
             raise KeyError(
-                "Only SGD and Adadelta implemented in Scikit-NN at present.")
+                "Only SGD and Adadelta available.")
 
         if self._nn_hypers['learning_decay'] != 0.0:
             raise KeyError(
-                "SGD learning decay not supported in SKNN (!)")
+                "SGD learning decay not supported.")
 
         # The contents of a mutable variable can be changed in a closure.
         batch_loss = [0]
