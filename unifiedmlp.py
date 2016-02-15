@@ -384,7 +384,7 @@ class UnifiedMLP(object):
         for i in range(self._nn_hypers['max_epoch']):
             n_epoch[0] = i
 
-            time_curve.append(-timeit.default_timer())
+            start_time = timeit.default_timer()
 
             history = keras_nn.fit(
                 X_train, Y_train,
@@ -394,7 +394,8 @@ class UnifiedMLP(object):
                 callbacks=[LearningRateScheduler(learning_schedule)]
             )
 
-            time_curve[i] += timeit.default_timer()
+            end_time = timeit.default_timer()
+            time_curve.append(end_time - start_time)
 
             ####################
             #  Track progress  #
@@ -488,11 +489,12 @@ class UnifiedMLP(object):
 
         for i in range(self._nn_hypers['max_epoch']):
             try:
-                time_curve.append(-timeit.default_timer())
+                start_time = timeit.default_timer()
 
                 sklearn_nn.fit(X_train, Y_train)
 
-                time_curve[i] += timeit.default_timer()
+                end_time = timeit.default_timer()
+                time_curve.append(end_time - start_time)
             except ValueError as e:
                 raise KeyError(e.message)
 
@@ -554,12 +556,12 @@ class UnifiedMLP(object):
         elif self._nn_hypers['algorithm'] == 'adadelta':
             learning_rule = 'adadelta'
         else:
-            raise KeyError(
-                "Only SGD and Adadelta available.")
+            err_str = "The algorithm " + self._nn_hypers['algorithm'] +\
+                    " is not supported."
+            raise KeyError(err_str)
 
         if self._nn_hypers['learning_decay'] != 0.0:
-            raise KeyError(
-                "SGD learning decay not supported.")
+            raise KeyError("SGD learning decay not supported.")
 
         # The contents of a mutable variable can be changed in a closure.
         batch_loss = [0]
@@ -616,11 +618,12 @@ class UnifiedMLP(object):
                                            self.X_train, self.Y_train)
 
         for i in range(self._nn_hypers['max_epoch']):
-            time_curve.append(-timeit.default_timer())
+            start_time = timeit.default_timer()
 
             sknn_nn.fit(X_train, Y_train)
 
-            time_curve[i] += timeit.default_timer()
+            end_time = timeit.default_timer()
+            time_curve.append(end_time - start_time)
             loss_curve.append(batch_loss[0])
 
             # NOTE: predict_proba returns 2 entries per binary class, which are
