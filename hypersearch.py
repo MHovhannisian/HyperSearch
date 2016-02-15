@@ -5,6 +5,7 @@
 import pickle
 import itertools
 import warnings
+from collections import Counter
 
 # User-contributed modules
 import numpy as np
@@ -62,7 +63,9 @@ class HyperSearch(object):
         except AssertionError:
             raise AssertionError('No parameters to search over were specified.')
 
+        err_count = Counter()
         n_tests = np.prod(self._dims)
+
         bar = progressbar.ProgressBar(
             maxval=n_tests,
             widgets=[
@@ -86,9 +89,11 @@ class HyperSearch(object):
 
                 self.save()
 
-            except KeyError: # When unspported settings are specified
+            except KeyError as e: # When unsupported settings are specified
                 if ignore_failure:
                     self.success[coordinates] = False
+                    err = (this_settings['module'], e.message)
+                    err_count[err] += 1
                 else:
                     raise
             finally:
@@ -97,6 +102,13 @@ class HyperSearch(object):
             bar.update(i+1)
 
         bar.finish()
+
+        if err_count:
+            print
+            warnings.warn('Some tests failed due to incompatible settings:')
+            print "{0:7} | {1:5} | {2}".format("Module", "Count", "Error message")
+            for key, count, in err_count.items():
+                print "{0:7} | {1:5} | {2}".format(key[0], count, key[1])
 
         return self
 
@@ -263,8 +275,6 @@ class HyperSearch(object):
                     plt.plot(x, y, 'o--', label=label)
                     plt.xticks(x_master, categories)
                 else:
-                    print len(x)
-                    print len(y)
                     plt.plot(x, y, label=label)
 
             x, y = [], []
@@ -338,7 +348,7 @@ if __name__ == "__main__":
     hs.save().set_fixed(max_epoch=10)
     hs.set_search(module=['sklearn', 'sknn'],
                   algorithm=['adam','adadelta', 'sgd'],
-                  frac_training=np.arange(0.1,1.1,0.1)
+                  # frac_training=np.arange(0.1,1.1,0.1)
                  )
     hs.run_tests(ignore_failure=True).save()
 
