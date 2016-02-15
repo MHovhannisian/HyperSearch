@@ -29,6 +29,8 @@ class HyperSearch(object):
         self.fixed = False
         self.search = False
 
+        self.performance = ['F1', 'accuracy', 'time_taken']
+
     def set_fixed(self, **hypers):
         assert(not self.fixed)
         self.fixed = True
@@ -54,8 +56,6 @@ class HyperSearch(object):
 
         self.accuracy = np.zeros(self._dims, dtype=float)
         self.F1 = np.zeros(self._dims, dtype=float)
-
-        self.performance = ['F1', 'accuracy', 'time_taken']
 
         return self
 
@@ -282,7 +282,7 @@ class HyperSearch(object):
         plt.legend(loc='best')
         plt.show()
 
-    def graph(self, x_axis='epoch', y_axis='accuracy', z_axis=None,
+    def graph(self, x_axis='epoch', y_axis='accuracy', z_axis='accuracy',
             lines=[], **vals):
 
         if not self.ran.all():
@@ -291,12 +291,12 @@ class HyperSearch(object):
 
         if x_axis == 'epoch':
             self._training_graph(y_axis, lines, **vals)
-        elif z_axis:
+        elif y_axis not in self.performance:
             try:
-                assert(not lines and y_axis not in performance)
+                assert(not lines and z_axis in self.performance)
             except AssertionError:
-                raise("For 3D graphs, the performance metric should be on the"
-                        + " z-axis and no seperate lines can be specified")
+                raise AssertionError("For 3D graphs, the performance metric" +
+                    " should be on the z-axis and no seperate lines can be specified")
             self._results_graph3D(x_axis, y_axis, z_axis, **vals)
         else:
             self._results_graph(x_axis, y_axis, lines, **vals)
@@ -454,10 +454,11 @@ if __name__ == "__main__":
     # hs.set_search(module=['sklearn', 'keras', 'sknn'],
                   # algorithm=['adam','adadelta', 'sgd'],
                   # dropout=[0.0, 0.5],
-                  # frac_training=np.arange(0.1, 1.1, 0.1)
+                  # frac_training=np.arange(0.1, 1.1, 0.5)
                  # )
     # hs.run_tests(ignore_failure=True).save()
 
-    hs = HyperSearch.load('Angie.save')
-    hs.graph(x_axis='frac_training', lines=['algorithm', 'dropout'], module='keras')
+    hs = HyperSearch.load()
+    # hs.graph(x_axis='frac_training', lines=['dropout', 'module'], algorithm='sgd')
+    hs.graph(x_axis='frac_training', y_axis='dropout')
     # hs.graph(x_axis='dropout')
