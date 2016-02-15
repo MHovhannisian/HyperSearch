@@ -52,12 +52,16 @@ class HyperSearch(object):
         self.ran = np.zeros(self._dims, dtype=bool)
         self.success = np.ones(self._dims, dtype=bool)
 
-        self.accuracy = np.empty(self._dims, dtype=float)
-        self.F1 = np.empty(self._dims, dtype=float)
+        self.accuracy = np.zeros(self._dims, dtype=float)
+        self.F1 = np.zeros(self._dims, dtype=float)
+
+        self.performance = ['F1', 'accuracy', 'time_taken']
 
         return self
 
     def run_tests(self, ignore_failure=False):
+        ''' Execute the specified parameter search. '''
+
         try:
             assert (self.search)
         except AssertionError:
@@ -75,6 +79,9 @@ class HyperSearch(object):
             ]).start()
 
         for i, coordinates in enumerate(itertools.product(*self._dim_idxs)):
+            if self.ran[coordinates]:
+                continue
+
             this_settings = {self._dim_names[j]: self._dim_vals[j][coord]
                                     for j, coord in enumerate(coordinates)}
             self.MLP.set_hypers(**this_settings)
@@ -86,8 +93,6 @@ class HyperSearch(object):
                 self.results[coordinates] = result
                 self.accuracy[coordinates] = result['performance']['accuracy']
                 self.F1[coordinates] = result['performance']['F1']
-
-                self.save()
 
             except KeyError as e: # When unsupported settings are specified
                 if ignore_failure:
@@ -145,18 +150,12 @@ class HyperSearch(object):
                 warnstr += "\t" + name + ": " + str(value) + "\n"
             warnings.warn(warnstr)
 
-    def graph3D(self, x_axis, y_axis, z_axis='accuracy', **vals):
+    def _results_graph3D(self, x_axis, y_axis, z_axis='accuracy', **vals):
         '''
         '''
-
-        try:
-            assert(self.ran.all())
-        except AssertionError:
-            print "Cannot make graphs - please run run_tests()."
-            return None
 
         # Everything except x_axis needs a fixed coordinate
-        coords = self.get_fixed_coords(vals)
+        coords = self._get_fixed_coords(vals)
 
         # If any coords were automatically set, print out info
         self._warn_autoset_coords([x_axis]+vals.keys()+[y_axis], coords)
@@ -169,7 +168,6 @@ class HyperSearch(object):
         x_mesh, y_mesh = np.meshgrid(x, y)
 
         z = np.empty_like(y_mesh)
-        print z.shape
 
         for i in range(len(x)):
             for j in range(len(y)):
@@ -191,8 +189,126 @@ class HyperSearch(object):
 
         plt.show()
 
-    def graph2D(self, x_axis, y_axis='accuracy', lines=[], **vals):
+    def _multiline2D(self, lines):
+        ''' Set up iterables for plotting multiple lines on one xy graph.
+
+        Returns
+        -------
+
+        lines_dims : list of int
+            List of indices in the coords array and all results arrays over
+            which the quantities in `lines` varies.
+
+        line_group_idxs : iterable
+            Generator of tuples giving a set of indices to use as coordinates
+            for the hyperparameters specified to vary in `lines`. Together, the
+            tuples list every possible combination.
+
+        line_group_vals : iterable
+            Values corresponding to the coordinate sets in `line_group_idxs`
+        '''
+
+        if lines:
+            lines_dims = [self._dim_names.index(line) for line in lines]
+            line_idx_ars = [self._dim_idxs[lines_dim] for lines_dim in lines_dims]
+            line_val_ars = [self._dim_vals[lines_dim] for lines_dim in lines_dims]
+            line_group_idxs = itertools.product(*line_idx_ars)
+            line_group_vals = itertools.product(*line_val_ars)
+        else:
+            # Dummy val
+            line_group_idxs = [(0,)]
+            line_group_vals = iter([0])
+            lines_dims = None
+
+        return lines_dims, line_group_idxs, line_group_vals
+
+    def _training_graph(self, y_axis='accuracy', lines=[], **vals):
+        ''' Graph test/validation performance *per epoch*.
+
+        Where the parameters `lines`, and `**vals` not been used to fully
+        constrain what will be plotted, the values of the best-performing
+        neural network will be used.
+
+        Parameters
+        ----------
+
+        y_axis : {'accuracy', 'F1', 'time_taken'}
+            Name of performance measure to plot on the y-axis. 'time_taken' is
+            the training time *per epoch*.
+
+        lines : list of str
+            Seperate lines will be plotted for each value of this hyperparameter.
+
+        vals
+            Fixed values to use when taking slice.
+        '''
+
+        coords = self._get_fixed_coords(vals)
+
+        # If any coords were automatically set, print out info
+        self._warn_autoset_coords(vals.keys()+lines, coords)
+
+        y = []
+        ymaxlen = 0
+
+        # Set up multi-line plotting
+        lines_dims, line_group_idxs, line_group_vals = self._multiline2D(lines)
+
+        # Plotting loop
+        for line_group_idx in line_group_idxs:
+
+            # Set coords specific to this line
+            if lines:
+                for i_idx, idx in enumerate(line_group_idx):
+                    coords[lines_dims[i_idx]] = idx
+
+            if self.success[tuple(coords)]:
+                y = self.results[tuple(coords)]['training'][y_axis]
+                ymaxlen = max(len(y), ymaxlen)
+
+            label = self._line_label(lines, line_group_vals.next())
+
+            # Plot
+            if y:
+                plt.plot(y, label=label)
+
+            y = []
+
+        bench = self.MLP.benchmark[y_axis]
+        plt.plot([0, ymaxlen - 1], [bench, bench], '-.', label="Stratified Random")
+        plt.xlabel("Epoch")
+        plt.ylabel(y_axis)
+
+        plt.legend(loc='best')
+        plt.show()
+
+    def graph(self, x_axis='epoch', y_axis='accuracy', z_axis=None,
+            lines=[], **vals):
+
+        if not self.ran.all():
+            print "Cannot make graphs - please run run_tests()."
+            return self
+
+        if x_axis == 'epoch':
+            self._training_graph(y_axis, lines, **vals)
+        elif z_axis:
+            try:
+                assert(not lines and y_axis not in performance)
+            except AssertionError:
+                raise("For 3D graphs, the performance metric should be on the"
+                        + " z-axis and no seperate lines can be specified")
+            self._results_graph3D(x_axis, y_axis, z_axis, **vals)
+        else:
+            self._results_graph(x_axis, y_axis, lines, **vals)
+
+        return self
+
+    def _results_graph(self, x_axis, y_axis='accuracy', lines=[], **vals):
         ''' Produce a graph of a hyperparameter against a measure of performance.
+
+        Where the parameters `lines`, and `**vals` not been used to fully
+        constrain what will be plotted, the values of the best-performing
+        neural network will be used.
 
         Parameters
         ----------
@@ -200,26 +316,19 @@ class HyperSearch(object):
         x_axis : str
             Name of hyperparameter to plot along the x-axis.
 
-        y_axis : str
-            Name of performance measure to plot on the y-axis.
+        y_axis : {'accuracy', 'F1', 'time_taken'}
+            Name of performance measure to plot on the y-axis. 'time_taken' is
+            the average training time *per epoch*.
 
         lines : list of str
             Seperate lines will be plotted for each value of this hyperparameter.
 
-        vals : dict
-            Fixed values to use when taking slice. If a fixed value is not
-            specified, the global maximum of the accuracy score will be found
-            and the corresponding value of the hyperparameter will be used.
+        vals
+            Fixed values to use when taking slice.
         '''
 
-        try:
-            assert(self.ran.all())
-        except AssertionError:
-            print "Cannot make graphs - please run run_tests()."
-            return None
-
         # Everything except x_axis needs a fixed coordinate
-        coords = self.get_fixed_coords(vals)
+        coords = self._get_fixed_coords(vals)
 
         # If any coords were automatically set, print out info
         self._warn_autoset_coords([x_axis]+vals.keys()+lines, coords)
@@ -237,18 +346,10 @@ class HyperSearch(object):
             x_master = range(len(categories))
 
         # Set up multi-line plotting
-        if lines:
-            lines_dims = [self._dim_names.index(line) for line in lines]
-            line_idx_ars = [self._dim_idxs[lines_dim] for lines_dim in lines_dims]
-            line_val_ars = [self._dim_vals[lines_dim] for lines_dim in lines_dims]
-            line_group_idxs = list(itertools.product(*line_idx_ars))
-            line_group_vals = list(itertools.product(*line_val_ars))
-        # Otherwise just set dummy value.
-        else:
-            line_group_idxs = [(0,)]
+        lines_dims, line_group_idxs, line_group_vals = self._multiline2D(lines)
 
         # Plotting loop
-        for i_line, line_group_idx in enumerate(line_group_idxs):
+        for line_group_idx in line_group_idxs:
 
             # Set coords specific to this line
             if lines:
@@ -263,10 +364,7 @@ class HyperSearch(object):
                     y.append(result['performance'][y_axis])
                     x.append(x_master[i])
 
-            if lines:
-                label = self._line_label(lines, line_group_vals[i_line])
-            else:
-                label = "MLP"
+            label = self._line_label(lines, line_group_vals.next())
 
             # Plot
             if y:
@@ -280,14 +378,14 @@ class HyperSearch(object):
             x, y = [], []
 
         bench = self.MLP.benchmark[y_axis]
-        plt.plot([x_master[0],x_master[-1]], [bench, bench], label="Stratified Random")
+        plt.plot([x_master[0],x_master[-1]], [bench, bench], '-.', label="Stratified Random")
         plt.xlabel(x_axis)
         plt.ylabel(y_axis)
 
         plt.legend(loc='best')
         plt.show()
 
-    def get_fixed_coords(self, fixed_vals):
+    def _get_fixed_coords(self, fixed_vals):
         ''' Returns coordinates for taking slices of the data.
 
         For viewing slices of the data, selects the fixed values of the
@@ -321,36 +419,45 @@ class HyperSearch(object):
 
         for key, value in fixed_vals.items():
             dim = self._dim_names.index(key)
-            fixed_coords[dim] = np.isclose(self._dim_vals[dim], value).nonzero()[0][0]
+            try: # Works for non-categorical
+                fixed_coords[dim] = np.isclose(self._dim_vals[dim], value).nonzero()[0][0]
+            except TypeError:
+                fixed_coords[dim] = (self._dim_vals[dim] == value).nonzero()[0][0]
 
         return fixed_coords
 
     @staticmethod
     def _line_label(hyperparam_names, hyperparam_values):
         ''' Produce label differentiating lines in a 2D graph. '''
-        label = "{0}: {1}".format(hyperparam_names[0], hyperparam_values[0])
 
-        for i in range(1, len(hyperparam_names)):
-            label += "; {0}: {1}".format(hyperparam_names[i], hyperparam_values[i])
+        if hyperparam_names:
+            label = "{0}: {1}".format(hyperparam_names[0], hyperparam_values[0])
+
+            for i in range(1, len(hyperparam_names)):
+                label += "; {0}: {1}".format(hyperparam_names[i], hyperparam_values[i])
+        else:
+            label = 'MLP'
 
         return label
 
 
 if __name__ == "__main__":
-    data_file = "data_top5.pickle"
-    with open(data_file, 'r') as datafile:
-        pd_df = pickle.load(datafile)
+    # data_file = "data_top5.pickle"
+    # with open(data_file, 'r') as datafile:
+        # pd_df = pickle.load(datafile)
 
-    X = pd_df.ix[:, 0:13]
-    Ys = pd_df.ix[:, 15:25]
+    # X = pd_df.ix[:, 0:13]
+    # Ys = pd_df.ix[:, 15:25]
 
-    hs = HyperSearch(X, Ys)
-    hs.save().set_fixed(max_epoch=10)
-    hs.set_search(module=['sklearn', 'sknn'],
-                  algorithm=['adam','adadelta', 'sgd'],
-                  # frac_training=np.arange(0.1,1.1,0.1)
-                 )
-    hs.run_tests(ignore_failure=True).save()
+    # hs = HyperSearch(X, Ys)
+    # hs.set_fixed(max_epoch=10)
+    # hs.set_search(module=['sklearn', 'keras', 'sknn'],
+                  # algorithm=['adam','adadelta', 'sgd'],
+                  # dropout=[0.0, 0.5],
+                  # frac_training=np.arange(0.1, 1.1, 0.1)
+                 # )
+    # hs.run_tests(ignore_failure=True).save()
 
-    hs = HyperSearch.load()
-    hs.graph2D(x_axis='algorithm', lines=['module'])
+    hs = HyperSearch.load('Angie.save')
+    hs.graph(x_axis='frac_training', lines=['algorithm', 'dropout'], module='keras')
+    # hs.graph(x_axis='dropout')
