@@ -73,7 +73,7 @@ class UnifiedMLP(object):
         ##############
         #  Learning  #
         ##############
-        'learning_rate_init': 0.001, # Adam and SGD only
+        'learning_rate': 0.001, # Adam and SGD only
         'algorithm': 'sgd',
         'batch_size': 16,
 
@@ -109,14 +109,6 @@ class UnifiedMLP(object):
         #  Consistent output  # (for developing and debugging)
         #######################
         'random_state': 1,
-
-        ####################################################
-        #  Iteration/epoch settings - don't change these!  #
-        ####################################################
-        'warm_start': True,
-        # In scikit-learn (and sknn), "iter" really means epoch.
-        'max_iter': 1,
-        'learning_rate': 'constant',
     }
 
     # For settings which take a categorical value, provided is a dict of
@@ -128,11 +120,6 @@ class UnifiedMLP(object):
             'linear': ['sknn', 'keras'],
             'logistic': ['sklearn', 'sknn', 'keras'],
             'tanh': ['sklearn', 'sknn', 'keras']
-        },
-
-        'nesterovs_momentum': {
-            True: ['sklearn', 'sknn', 'keras'],
-            False: ['sklearn', 'sknn', 'keras']
         },
 
         'algorithm': {
@@ -220,6 +207,13 @@ class UnifiedMLP(object):
         module-specific validity, e.g. whether sklearn supports an algorithm.
         '''
 
+        for hyper_name in self._nn_hypers.keys():
+            try:
+                assert (hyper_name in self._default_hypers.keys())
+            except AssertionError:
+                raise AssertionError("The setting name \"" + hyper_name +
+                        " \" is unknown")
+
         if self._nn_hypers['algorithm'] != 'sgd' and self._nn_hypers['learning_decay'] != 0.0:
             raise KeyError(
                 "The learning_decay option is for the sgd algorithm only.")
@@ -263,7 +257,8 @@ class UnifiedMLP(object):
     def run_test(self):
         """ Build, train and test a neural network architecture.
 
-        Guarentee: If incompatible settings are passed, ``KeyError`` is raised.
+        Guarentee: If settings incompatible with a specific module are passed,
+        ``KeyError`` is raised.
 
         Returns
         -------
@@ -317,7 +312,7 @@ class UnifiedMLP(object):
         n_epoch = [0]
 
         def learning_schedule(epoch):
-            init = self._nn_hypers['learning_rate_init']
+            init = self._nn_hypers['learning_rate']
             factor = (1 - self._nn_hypers['learning_decay'])**n_epoch[0]
             lr = factor * init
             return lr
@@ -347,7 +342,7 @@ class UnifiedMLP(object):
 
         if self._nn_hypers['algorithm'] == 'sgd':
             optimiser = SGD(
-                lr=self._nn_hypers['learning_rate_init'],
+                lr=self._nn_hypers['learning_rate'],
                 decay=0.0,
                 momentum=self._nn_hypers['momentum'],
                 nesterov=self._nn_hypers['nesterovs_momentum'],
@@ -355,7 +350,7 @@ class UnifiedMLP(object):
             callbacks = [LearningRateScheduler(learning_schedule)]
         elif self._nn_hypers['algorithm'] == 'adam':
             optimiser = Adam(
-                lr=self._nn_hypers['learning_rate_init'],
+                lr=self._nn_hypers['learning_rate'],
                 beta_1=self._nn_hypers['beta_1'],
                 beta_2=self._nn_hypers['beta_2'],
                 epsilon=self._nn_hypers['epsilon']
@@ -457,17 +452,22 @@ class UnifiedMLP(object):
             raise KeyError(err_str[:-2])
 
         valid_keys = [
-            'activation', 'alpha', 'batch_size', 'max_iter', 'random_state',
-            'shuffle', 'learning_rate_init', 'verbose', 'warm_start',
-            'momentum', 'nesterovs_momentum', 'beta_1', 'beta_2', 'epsilon',
-            'algorithm'
+            'activation', 'alpha', 'batch_size', 'random_state', 'shuffle',
+            'verbose', 'momentum', 'nesterovs_momentum', 'beta_1',
+            'beta_2', 'epsilon', 'algorithm'
         ]
 
         sklearn_settings = {key: val for key, val in self._nn_hypers.items()
                             if key in valid_keys}
 
-        sklearn_settings.update({'n_labels': self.n_labels_sklearn})
-        sklearn_settings.update({'hidden_layer_sizes': (self._nn_hypers['hidden_layer_size'])})
+        sklearn_settings.update({
+            'n_labels': self.n_labels_sklearn,
+            'hidden_layer_sizes': (self._nn_hypers['hidden_layer_size']),
+            'learning_rate_init': self._nn_hypers['learning_rate'],
+            'learning_rate': 'constant',
+            'max_iter': 1,
+            'warm_start': True
+         })
 
         ###############
         #  Create NN  #
@@ -488,7 +488,7 @@ class UnifiedMLP(object):
         n_valid = [0]
         stop_reason = 0
 
-        learning_rate = self._nn_hypers['learning_rate_init']
+        learning_rate = sklearn_settings['learning_rate_init']
 
         X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
                                            self.X_train, self.Y_train)
@@ -553,7 +553,7 @@ class UnifiedMLP(object):
             raise KeyError(err_str)
 
         if self._nn_hypers['algorithm'] == 'sgd':
-            learning_rate = self._nn_hypers['learning_rate_init']
+            learning_rate = self._nn_hypers['learning_rate']
             if self._nn_hypers['momentum'] == 0.0:
                 learning_rule = 'sgd'
             elif self._nn_hypers['nesterovs_momentum'] is True:

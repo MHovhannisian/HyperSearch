@@ -46,6 +46,7 @@ class HyperSearch(object):
                         'algorithm': 'Learning algorithm',
                         'dropout': 'Dropout (probability)',
                         'hidden_layer_size' : 'Number of hidden units',
+                        'learning_rate' : 'Initial learning rate'
                        }
 
 
