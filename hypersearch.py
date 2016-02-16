@@ -5,7 +5,7 @@
 import pickle
 import itertools
 import warnings
-from collections import Counter
+import collections
 
 # User-contributed modules
 import numpy as np
@@ -30,6 +30,8 @@ class HyperSearch(object):
         self.search = False
 
         self.performance = ['F1', 'accuracy', 'time']
+
+        self.errs = collections.Counter()
 
     def set_fixed(self, **hypers):
         assert(not self.fixed)
@@ -67,7 +69,7 @@ class HyperSearch(object):
         except AssertionError:
             raise AssertionError('No parameters to search over were specified.')
 
-        err_count = Counter()
+        errs = collections.Counter()
         n_tests = np.prod(self._dims)
 
         bar = progressbar.ProgressBar(
@@ -98,7 +100,7 @@ class HyperSearch(object):
                 if ignore_failure:
                     self.success[coordinates] = False
                     err = (this_settings['module'], e.message)
-                    err_count[err] += 1
+                    errs[err] += 1
                 else:
                     raise
             finally:
@@ -108,12 +110,11 @@ class HyperSearch(object):
 
         bar.finish()
 
-        if err_count:
-            print
-            warnings.warn('Some tests failed due to incompatible settings:')
-            print "{0:7} | {1:5} | {2}".format("Module", "Count", "Error message")
-            for key, count, in err_count.items():
-                print "{0:7} | {1:5} | {2}".format(key[0], count, key[1])
+        self._show_errs(errs)
+        self.errs.update(errs)
+
+        self.static_hyperparams = self._get_static_hyperparams(
+                result['hypers'], self._dim_names)
 
         return self
 
@@ -189,7 +190,7 @@ class HyperSearch(object):
 
         plt.show()
 
-    def _multiline2D(self, lines):
+    def _multiline(self, lines):
         ''' Set up iterables for plotting multiple lines on one xy graph.
 
         Returns
@@ -252,7 +253,7 @@ class HyperSearch(object):
         ymaxlen = 0
 
         # Set up multi-line plotting
-        lines_dims, line_group_idxs, line_group_vals = self._multiline2D(lines)
+        lines_dims, line_group_idxs, line_group_vals = self._multiline(lines)
 
         # Plotting loop
         for line_group_idx in line_group_idxs:
@@ -350,7 +351,7 @@ class HyperSearch(object):
             x_master = range(len(categories))
 
         # Set up multi-line plotting
-        lines_dims, line_group_idxs, line_group_vals = self._multiline2D(lines)
+        lines_dims, line_group_idxs, line_group_vals = self._multiline(lines)
 
         # Plotting loop
         for line_group_idx in line_group_idxs:
@@ -420,7 +421,7 @@ class HyperSearch(object):
         '''
 
         # Obtain coordinates of the global accuracy maximum
-        max_coords = np.unravel_index(self.accuracy.argmax(), self.accuracy.shape)
+        max_coords = n_argmax(self.accuracy, 1)[0]
 
         # Set return value to these coordinates
         fixed_coords = [max_coords[i] for i in range(self._n_dims)]
@@ -448,27 +449,106 @@ class HyperSearch(object):
 
         return label
 
-    def show(self):
+    @staticmethod
+    def _show_errs(errs):
+
+        if errs:
+            print
+            print "Some tests failed due to incompatible settings:"
+            print "{0:7} | {1:5} | {2}".format("Module", "Count", "Error message")
+            for key, count, in errs.items():
+                print "{0:7} | {1:5} | {2}".format(key[0], count, key[1])
+
+    @staticmethod
+    def _get_static_hyperparams(hypers, search_hypers):
+        static_hyperparams = {key: item for (key, item) in hypers.items()
+                if key not in search_hypers}
+        return static_hyperparams
+
+    def summary(self):
         ''' Summarise the HyperSearch instance. '''
 
-if __name__ == "__main__":
-    # data_file = "data_top5.pickle"
-    # with open(data_file, 'r') as datafile:
-        # pd_df = pickle.load(datafile)
+        print
+        print "HyperSearch summary"
+        print "-------------------"
+        print
 
-    # X = pd_df.ix[:, 0:13]
-    # Ys = pd_df.ix[:, 15:25]
+        if not self.search:
+            print "Fresh HyperSearch instance. No search parameters given yet."
+        else:
+            print "Configured hyperparameter search:"
 
-    # hs = HyperSearch(X, Ys)
-    # hs.set_fixed(max_epoch=10)
-    # hs.set_search(module=['sklearn', 'keras', 'sknn'],
-                  # algorithm=['adam','adadelta', 'sgd'],
-                  # dropout=[0.0, 0.5],
-                  # frac_training=np.arange(0.1, 1.1, 0.5)
-                 # )
-    # hs.run_tests(ignore_failure=True).save()
+            print "{0:14} | {1:3} | Range".format("Hyperparameter", "N", "High val", "Low val")
+            for name, values, in zip(self._dim_names, self._dim_vals):
+                line = "{0:14} | {1:3} | ".format(name, len(values))
+                try:
+                    values[0] - 1.0 # Fail if categorical data.
+                    line += "{:.3} to {:.3}".format(values[0], values[-1])
+                except TypeError:
+                    line += " ".join(values)
+                finally:
+                    print line
 
-    hs = HyperSearch.load()
-    hs.graph(x_axis='epoch', y_axis='time', lines=['dropout', 'module'], algorithm='sgd')
-    # hs.graph(x_axis='frac_training', y_axis='dropout')
-    # hs.graph(x_axis='dropout')
+            line = "{0:14}      = {1:>2} models".format(" ", np.prod(self._dims))
+            print line
+
+            self._show_errs(self.errs)
+
+            print
+
+            if self.ran.all():
+                print "The hyperparameter search has completed. Best models:"
+                coord_sets = n_argmax(self.accuracy, n=3)
+                print "{0:14} | {1:7} | {2:7} | {3:7}".\
+                        format("Hyperparameter", "Model 1", "Model 2", "Model 3")
+                for name, values, i in zip(self._dim_names, self._dim_vals, range(self._n_dims)):
+                    try: # Fail if categorical data.
+                        print "{0:14} | {1:>7.3g} | {2:>7.3g} | {3:>7.3g}".\
+                            format(name, *[values[coord_sets[j][i]] for j in range(3)])
+                    except ValueError:
+                        print "{0:14} | {1:>7} | {2:>7} | {3:>7}".\
+                            format(name, *[values[coord_sets[j][i]] for j in range(3)])
+
+                print
+                print "{0:14} | {1:7} | {2:7} | {3:7}".\
+                        format("Performance", "Model 1", "Model 2", "Model 3")
+                for i_perf, perf in enumerate(self.performance):
+                    print "{0:14} | {1:7.3f} | {2:7.3f} | {3:7.3f}".\
+                        format(perf, *[self.results[coord_sets[j]]['performance'][self.performance[i_perf]] for j in range(3)])
+
+            else:
+                print "The hyperparameter search is incomplete."
+
+        return self
+
+def n_argmax(arr, n=1):
+    ''' Find the coordinates of the top n values in arr. '''
+
+    try:
+        assert(np.prod(arr.shape) >= n)
+    except AssertionError:
+        warnings.warn("n requested top values exceeds array size." +
+                " Auto-setting n to the array size.")
+        n = np.prod(arr.shape) >= n
+
+    coords = []
+    vals = []
+
+    minval = np.array(arr).min()
+
+    for i in range(n):
+        # Find global maximum
+        max_coords = np.unravel_index(arr.argmax(), arr.shape)
+
+        # Store coords, values at these coords
+        coords.append(max_coords)
+        vals.append(arr[max_coords])
+
+        # Set value equal to minimum value so it won't be found next time.
+        arr[max_coords] = minval
+
+    # Reset modified values in arr
+    for coord, val in zip(coords, vals):
+        arr[coord] = val
+
+    return coords
