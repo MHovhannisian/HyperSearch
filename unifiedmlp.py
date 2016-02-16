@@ -169,7 +169,7 @@ class UnifiedMLP(object):
         Y_test_pred = classifier.predict(self.X_test, self.Y_test)
 
         accuracy, F1 = getScores(self.Y_test, Y_test_pred)
-        self.benchmark = {'F1': F1, 'accuracy': accuracy}
+        self.benchmark = {'F1': F1, 'accuracy': accuracy, 'time': 0.0}
 
     @staticmethod
     def _prepare_data(X, Y, split):

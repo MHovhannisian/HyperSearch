@@ -29,7 +29,25 @@ class HyperSearch(object):
         self.fixed = False
         self.search = False
 
+        # Data on outputting
         self.performance = ['F1', 'accuracy', 'time']
+        self.results_ylabels = {'F1': 'F1 score (test data)',
+                                'accuracy': 'Accuracy score (test data)',
+                                'time': 'Training time per epoch (seconds)'
+                               }
+        self.training_ylabels = {'F1': 'F1 score (validation data)',
+                                 'accuracy': 'Accuracy score (validation data)',
+                                 'time': 'Training time for epoch (seconds)',
+                                 'loss': 'Loss function (training data)'
+                                }
+        #TODO Finish this!
+        self.xlabels = {'frac_training': 'Fraction training data used',
+                        'module': 'Python module',
+                        'algorithm': 'Learning algorithm',
+                        'dropout': 'Dropout (probability)',
+                        'hidden_layer_size' : 'Number of hidden units',
+                       }
+
 
         self.errs = collections.Counter()
 
@@ -184,9 +202,9 @@ class HyperSearch(object):
         cmap = sns.cubehelix_palette(light=1, as_cmap=True)
 
         ax.plot_surface(x_mesh, y_mesh, z, cmap=cmap, rstride=1, cstride=1)
-        ax.set_xlabel(x_axis)
-        ax.set_ylabel(y_axis)
-        ax.set_zlabel(z_axis)
+        ax.set_xlabel(self.xlabels[x_axis])
+        ax.set_ylabel(self.xlabels[y_axis])
+        ax.set_zlabel(self.results_ylabels[z_axis])
 
         plt.show()
 
@@ -282,7 +300,7 @@ class HyperSearch(object):
             pass
 
         plt.xlabel("Epoch")
-        plt.ylabel(y_axis)
+        plt.ylabel(self.training_ylabels[y_axis])
 
         plt.legend(loc='best')
         plt.show()
@@ -388,8 +406,8 @@ class HyperSearch(object):
         except KeyError:
             pass
 
-        plt.xlabel(x_axis)
-        plt.ylabel(y_axis)
+        plt.xlabel(self.xlabels[x_axis])
+        plt.ylabel(self.results_ylabels[y_axis])
 
         plt.legend(loc='best')
         plt.show()
@@ -421,10 +439,7 @@ class HyperSearch(object):
         '''
 
         # Obtain coordinates of the global accuracy maximum
-        max_coords = n_argmax(self.accuracy, 1)[0]
-
-        # Set return value to these coordinates
-        fixed_coords = [max_coords[i] for i in range(self._n_dims)]
+        fixed_coords = list(n_argmax(self.accuracy, 1)[0])
 
         for key, value in fixed_vals.items():
             dim = self._dim_names.index(key)
@@ -499,22 +514,26 @@ class HyperSearch(object):
             if self.ran.all():
                 print "The hyperparameter search has completed. Best models:"
                 coord_sets = n_argmax(self.accuracy, n=3)
-                print "{0:14} | {1:7} | {2:7} | {3:7}".\
-                        format("Hyperparameter", "Model 1", "Model 2", "Model 3")
+                print "{0:14} | {1:9} | {2:7} | {3:7} | {4:7}".\
+                        format("Hyperparameter", "Benchmark", "Model 1", "Model 2", "Model 3")
                 for name, values, i in zip(self._dim_names, self._dim_vals, range(self._n_dims)):
                     try: # Fail if categorical data.
-                        print "{0:14} | {1:>7.3g} | {2:>7.3g} | {3:>7.3g}".\
-                            format(name, *[values[coord_sets[j][i]] for j in range(3)])
+                        print "{0:14} | {1:>9} | {2:>7.3g} | {3:>7.3g} | {4:>7.3g}".\
+                            format(name, "-",
+                                   *[values[coord_sets[j][i]] for j in range(3)]
+                                   )
                     except ValueError:
-                        print "{0:14} | {1:>7} | {2:>7} | {3:>7}".\
-                            format(name, *[values[coord_sets[j][i]] for j in range(3)])
+                        print "{0:14} | {1:>9} | {2:>7} | {3:>7} | {4:>7}".\
+                            format(name, "-", *[values[coord_sets[j][i]] for j in range(3)])
 
                 print
-                print "{0:14} | {1:7} | {2:7} | {3:7}".\
-                        format("Performance", "Model 1", "Model 2", "Model 3")
+                print "{0:14} | {1:9} | {2:7} | {3:7} | {4:7}".\
+                        format("Performance", "Benchmark", "Model 1", "Model 2", "Model 3")
                 for i_perf, perf in enumerate(self.performance):
-                    print "{0:14} | {1:7.3f} | {2:7.3f} | {3:7.3f}".\
-                        format(perf, *[self.results[coord_sets[j]]['performance'][self.performance[i_perf]] for j in range(3)])
+                    print "{0:14} | {1:9.3f} | {2:7.3f} | {3:7.3f} | {4:7.3f}".\
+                        format(perf, self.MLP.benchmark[perf],
+                               *[self.results[coord_sets[j]]['performance'][self.performance[i_perf]] for j in range(3)]
+                            )
 
             else:
                 print "The hyperparameter search is incomplete."
