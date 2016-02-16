@@ -73,7 +73,7 @@ class UnifiedMLP(object):
         ##############
         #  Learning  #
         ##############
-        'learning_rate_init': 0.001,
+        'learning_rate_init': 0.001, # Adam and SGD only
         'algorithm': 'sgd',
         'batch_size': 16,
 
@@ -246,12 +246,15 @@ class UnifiedMLP(object):
         self
         '''
 
-        # Modules often choke on numpy-type floats
+        # Modules often choke on numpy types
         for key in new_settings.keys():
             if type(new_settings[key]) == np.float64 or\
                     type(new_settings[key]) == np.float32:
 
                 new_settings[key] = float(new_settings[key])
+
+            elif type(new_settings[key]) == np.string_:
+                new_settings[key] = str(new_settings[key])
 
         self._nn_hypers.update(new_settings)
         self._validate_settings()
@@ -349,6 +352,7 @@ class UnifiedMLP(object):
                 momentum=self._nn_hypers['momentum'],
                 nesterov=self._nn_hypers['nesterovs_momentum'],
             )
+            callbacks = [LearningRateScheduler(learning_schedule)]
         elif self._nn_hypers['algorithm'] == 'adam':
             optimiser = Adam(
                 lr=self._nn_hypers['learning_rate_init'],
@@ -356,8 +360,10 @@ class UnifiedMLP(object):
                 beta_2=self._nn_hypers['beta_2'],
                 epsilon=self._nn_hypers['epsilon']
             )
+            callbacks = []
         elif self._nn_hypers['algorithm'] == 'adadelta':
             optimiser = Adadelta()  # Recommended to use the default values
+            callbacks = []
         else:
             err_str = "Learning algorithm \"" + self._nn_hypers['algorithm']
             err_str += "\" not implemented."
@@ -391,7 +397,7 @@ class UnifiedMLP(object):
                 nb_epoch=10,
                 batch_size=self._nn_hypers['batch_size'],
                 verbose=0,
-                callbacks=[LearningRateScheduler(learning_schedule)]
+                callbacks=callbacks
             )
 
             end_time = timeit.default_timer()
@@ -547,6 +553,7 @@ class UnifiedMLP(object):
             raise KeyError(err_str)
 
         if self._nn_hypers['algorithm'] == 'sgd':
+            learning_rate = self._nn_hypers['learning_rate_init']
             if self._nn_hypers['momentum'] == 0.0:
                 learning_rule = 'sgd'
             elif self._nn_hypers['nesterovs_momentum'] is True:
@@ -555,6 +562,7 @@ class UnifiedMLP(object):
                 learning_rule = 'momentum'
         elif self._nn_hypers['algorithm'] == 'adadelta':
             learning_rule = 'adadelta'
+            learning_rate = 1.0 # Recommended to always use default values here
         else:
             err_str = "The algorithm " + self._nn_hypers['algorithm'] +\
                     " is not supported."
@@ -583,7 +591,7 @@ class UnifiedMLP(object):
 
             # Learning settings
             loss_type='mcc',
-            learning_rate=self._nn_hypers['learning_rate_init'],
+            learning_rate=learning_rate,
             learning_rule=learning_rule,
             learning_momentum=self._nn_hypers['momentum'],
             batch_size=self._nn_hypers['batch_size'],

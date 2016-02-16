@@ -87,6 +87,9 @@ class HyperSearch(object):
         except AssertionError:
             raise AssertionError('No parameters to search over were specified.')
 
+        self.static_hyperparams = self._get_static_hyperparams(
+                self.MLP.get_hypers(), self._dim_names)
+
         errs = collections.Counter()
         n_tests = np.prod(self._dims)
 
@@ -105,6 +108,7 @@ class HyperSearch(object):
             this_settings = {self._dim_names[j]: self._dim_vals[j][coord]
                                     for j, coord in enumerate(coordinates)}
             self.MLP.set_hypers(**this_settings)
+            module = self.MLP.get_hypers()['module']
 
             try:
                 result, _ = self.MLP.run_test()
@@ -117,7 +121,7 @@ class HyperSearch(object):
             except KeyError as e: # When unsupported settings are specified
                 if ignore_failure:
                     self.success[coordinates] = False
-                    err = (this_settings['module'], e.message)
+                    err = (module, e.message)
                     errs[err] += 1
                 else:
                     raise
@@ -130,9 +134,6 @@ class HyperSearch(object):
 
         self._show_errs(errs)
         self.errs.update(errs)
-
-        self.static_hyperparams = self._get_static_hyperparams(
-                result['hypers'], self._dim_names)
 
         return self
 
