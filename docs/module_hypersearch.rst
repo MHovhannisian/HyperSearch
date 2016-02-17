@@ -7,7 +7,7 @@ Quickstart:
 
 * Do stuff
 
-Please also check the :doc:`hyperparameters reference guide<../settings_reference>`.
+Please also check the :doc:`hyperparameters reference guide<../hyperparameter_reference>`.
 
 Class reference
 ---------------
