@@ -19,9 +19,12 @@ import unifiedmlp
 
 class HyperSearch(object):
 
-    def __init__(self, X, Y, split=(0.70, 0.15, 0.15)):
+    def __init__(self, X, Y, class_names=[], split=(0.70, 0.15, 0.15)):
 
-        self.MLP = unifiedmlp.UnifiedMLP(X, Y, split)
+        if not class_names:
+            class_names = [str(i) for i in range(Y.shape[1])]
+
+        self.MLP = unifiedmlp.UnifiedMLP(X, Y, class_names, split)
 
         self._dim_names = []
         self._dim_vals = []
@@ -40,14 +43,37 @@ class HyperSearch(object):
                                  'time': 'Training time for epoch (seconds)',
                                  'loss': 'Loss function (training data)'
                                 }
-        #TODO Finish this!
-        self.xlabels = {'frac_training': 'Fraction training data used',
-                        'module': 'Python module',
-                        'algorithm': 'Learning algorithm',
-                        'dropout': 'Dropout (probability)',
-                        'hidden_layer_size' : 'Number of hidden units',
-                        'learning_rate' : 'Initial learning rate'
-                       }
+
+        self.xlabels = {
+            'module': 'Python module',
+            'frac_training': 'Fraction training data used',
+
+            'hidden_layer_size' : 'Number of hidden units',
+            'activation' : 'Activation function in hidden layer',
+
+            'alpha' : 'L2 penalty (alpha)',
+            'dropout': 'Dropout (probability)',
+
+            'learning_rate' : 'Initial learning rate'
+            'algorithm': 'Learning algorithm',
+            'batch_size' : 'Samples per minibatch',
+
+            'momentum' : 'SGD momentum term',
+            'nesterovs_momentum': 'Nesterov\'s momentum enabled'
+
+            'beta_1': 'beta_1 parameter (Adam)',
+            'beta_2': 'beta_2 parameter (Adam)',
+            'epsilon': 'epsilon parameter (Adam)',
+
+            'max_epoch' : 'Maximum epochs before stopping',
+            'epoch_tol' : 'Tolerance on stopping criteria',
+
+            'n_stable' : 'Consecutive stable epochs before stopping',
+
+            'learning_decay': 'Per-epoch learning rate decay (SGD)',
+
+            'early_stopping': 'Performance on validation data as stopping criterion'
+       }
 
 
         self.errs = collections.Counter()
