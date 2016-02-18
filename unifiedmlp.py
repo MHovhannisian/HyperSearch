@@ -11,9 +11,8 @@ import warnings
 import math
 import timeit
 
-from sklearn.cross_validation import KFold, train_test_split
+from sklearn.cross_validation import train_test_split
 from sklearn import preprocessing
-from sklearn.dummy import DummyClassifier
 
 from sklearn.neural_network import MLPClassifier as SKL_MLP
 
@@ -22,9 +21,8 @@ from sknn.mlp import Classifier as sknn_MLPClassifier, Layer
 import numpy as np
 
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation
+from keras.layers.core import Dense, Dropout
 from keras.optimizers import SGD, Adam, Adadelta
-from keras.utils.visualize_util import plot
 from keras.regularizers import l2
 from keras.callbacks import LearningRateScheduler
 
@@ -57,11 +55,11 @@ class UnifiedMLP(object):
 
     _default_hypers = {
         'module': 'keras',
-        'frac_training' : 1.0,
+        'frac_training': 1.0,
         ##################
         #  Architecture  #
         ##################
-        'hidden_layer_size': 15, # !!
+        'hidden_layer_size': 15,  # !!
         'activation': 'relu',
 
         ####################
@@ -73,7 +71,7 @@ class UnifiedMLP(object):
         ##############
         #  Learning  #
         ##############
-        'learning_rate': 0.001, # Adam and SGD only
+        'learning_rate': 0.001,  # Adam and SGD only
         'algorithm': 'sgd',
         'batch_size': 16,
 
@@ -130,6 +128,7 @@ class UnifiedMLP(object):
     }
 
     def __init__(self, X, Y, split=(0.70, 0.15, 0.15)):
+
         # Normalise inputs and split data
         self.X_train, self.X_valid, self.X_test, self.Y_train, self.Y_valid, self.Y_test = \
             self._prepare_data(X, Y, split)
@@ -140,11 +139,7 @@ class UnifiedMLP(object):
         # Help Scikit-learn support multi-label classification probabilities
         self.n_labels_sklearn = self.Y_train.sum(axis=1).mean()
 
-        # Stores all tests which have been run.
-        self.tests = []
-
-        # self.tests[0] is benchmark (stratified random)
-        self._benchmark()
+        self._benchmark()  # Stratified random
 
         # Apply the default settings
         self._nn_hypers = {}
@@ -155,8 +150,14 @@ class UnifiedMLP(object):
         classifier = _StratifiedRandomClassifier().fit(self.X_train, self.Y_train)
         Y_test_pred = classifier.predict(self.X_test, self.Y_test)
 
-        accuracy, F1 = getScores(self.Y_test, Y_test_pred)
-        self.benchmark = {'F1': F1, 'accuracy': accuracy, 'time': 0.0}
+        accuracy, F1, accuracy_all, F1_all = getScores(self.Y_test, Y_test_pred)
+        self.benchmark = {
+            'F1': F1,
+            'accuracy': accuracy,
+            'F1_all': F1_all,
+            'accuracy_all': accuracy_all,
+            'time_all': 0.0
+        }
 
     @staticmethod
     def _prepare_data(X, Y, split):
@@ -212,7 +213,7 @@ class UnifiedMLP(object):
                 assert (hyper_name in self._default_hypers.keys())
             except AssertionError:
                 raise AssertionError("The setting name \"" + hyper_name +
-                        " \" is unknown")
+                                     " \" is unknown")
 
         if self._nn_hypers['algorithm'] != 'sgd' and self._nn_hypers['learning_decay'] != 0.0:
             raise KeyError(
@@ -277,17 +278,19 @@ class UnifiedMLP(object):
 
         training, performance, model = modules[module]()
         results = {'hypers': self.get_hypers()}
-        results['training'] = { 'loss': training[0],
-                                'accuracy': training[1],
-                                'F1': training[2],
-                                'time': training[3]
-                              }
-        results['performance'] = { 'accuracy': performance[0],
-                                   'F1': performance[1],
-                                   'time': performance[2]
+        results['training'] = {'loss_all': training[0],
+                               'accuracy': training[1],
+                               'F1': training[2],
+                               'time_all': training[3],
+                               'accuracy_all': training[4],
+                               'F1_all': training[5]
+        }
+        results['performance'] = {'accuracy': performance[0],
+                                  'F1': performance[1],
+                                  'time_all': performance[2],
+                                  'accuracy_all': performance[3],
+                                  'F1_all': performance[4]
                                  }
-
-        self.tests.append(results)
 
         return results, model
 
@@ -371,8 +374,8 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        accuracy_curve = []
-        F1_curve = []
+        accuracy_curve, accuracy_all_curve = [], []
+        F1_curve, F1_all_curve = [], []
         time_curve = []
 
         n_loss = [0]
@@ -406,9 +409,13 @@ class UnifiedMLP(object):
 
             valid_proba = keras_nn.predict_proba(self.X_valid, verbose=0)
             valid_predict = self._predict_from_proba(valid_proba)
-            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
+            valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
+                getScores(self.Y_valid, valid_predict)
+
             accuracy_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
+            accuracy_all_curve.append(valid_accuracy_all)
+            F1_all_curve.append(valid_F1_all)
 
             #############################
             #  Check stopping criteria  #
@@ -418,16 +425,20 @@ class UnifiedMLP(object):
                 stop_reason = 1
                 break
 
-            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and\
+                    self._converged(accuracy_all_curve, n_valid):
                 stop_reason = 2
                 break
 
         test_proba = keras_nn.predict_proba(self.X_test, verbose=0)
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
+        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+            getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
-        performance = (test_accuracy, test_F1, np.mean(time_curve))
+        training = (loss_curve, accuracy_curve, F1_curve,
+                    time_curve, accuracy_all_curve, F1_all_curve)
+        performance = (test_accuracy, test_F1, np.mean(
+            time_curve), test_accuracy_all, test_F1_all)
 
         return training, performance, keras_nn
 
@@ -467,7 +478,7 @@ class UnifiedMLP(object):
             'learning_rate': 'constant',
             'max_iter': 1,
             'warm_start': True
-         })
+        })
 
         ###############
         #  Create NN  #
@@ -480,8 +491,8 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        F1_curve = []
-        accuracy_curve = []
+        accuracy_curve, accuracy_all_curve = [], []
+        F1_curve, F1_all_curve = [], []
         time_curve = []
 
         n_loss = [0]
@@ -511,10 +522,13 @@ class UnifiedMLP(object):
 
             valid_proba = sklearn_nn.predict_proba(self.X_valid)
             valid_predict = self._predict_from_proba(valid_proba)
-            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
+            valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
+                getScores(self.Y_valid, valid_predict)
 
             accuracy_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
+            accuracy_all_curve.append(valid_accuracy_all)
+            F1_all_curve.append(valid_F1_all)
 
             #############################
             #  Check stopping criteria  #
@@ -524,16 +538,20 @@ class UnifiedMLP(object):
                 stop_reason = 1
                 break
 
-            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and\
+                    self._converged(accuracy_all_curve, n_valid):
                 stop_reason = 2
                 break
 
         test_proba = sklearn_nn.predict_proba(self.X_test)
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
+        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+            getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
-        performance = (test_accuracy, test_F1, np.mean(time_curve))
+        training = (loss_curve, accuracy_curve, F1_curve,
+                    time_curve, accuracy_all_curve, F1_all_curve)
+        performance = (test_accuracy, test_F1, np.mean(
+            time_curve), test_accuracy_all, test_F1_all)
 
         return training, performance, sklearn_nn
 
@@ -562,10 +580,10 @@ class UnifiedMLP(object):
                 learning_rule = 'momentum'
         elif self._nn_hypers['algorithm'] == 'adadelta':
             learning_rule = 'adadelta'
-            learning_rate = 1.0 # Recommended to always use default values here
+            learning_rate = 1.0  # Recommended to always use default values here
         else:
             err_str = "The algorithm " + self._nn_hypers['algorithm'] +\
-                    " is not supported."
+                " is not supported."
             raise KeyError(err_str)
 
         if self._nn_hypers['learning_decay'] != 0.0:
@@ -614,8 +632,8 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        accuracy_curve = []
-        F1_curve = []
+        accuracy_curve, accuracy_all_curve = [], []
+        F1_curve, F1_all_curve = [], []
         time_curve = []
 
         n_loss = [0]
@@ -638,26 +656,33 @@ class UnifiedMLP(object):
             # True and False, adding to 1.0. We take the probability of True.
             valid_proba = sknn_nn.predict_proba(self.X_valid)[:, 1::2]
             valid_predict = self._predict_from_proba(valid_proba)
-            valid_accuracy, valid_F1 = getScores(self.Y_valid, valid_predict)
+            valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
+                getScores(self.Y_valid, valid_predict)
 
             accuracy_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
+            accuracy_all_curve.append(valid_accuracy_all)
+            F1_all_curve.append(valid_F1_all)
 
             # Use change in loss_curve to evaluate stability
             if self._converged(loss_curve, n_loss):
                 stop_reason = 1
                 break
 
-            if self._nn_hypers['early_stopping'] and self._converged(accuracy_curve, n_valid):
+            if self._nn_hypers['early_stopping'] and\
+                    self._converged(accuracy_all_curve, n_valid):
                 stop_reason = 2
                 break
 
         test_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1 = getScores(self.Y_test, test_predict)
+        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+            getScores(self.Y_test, test_predict)
 
-        training = (loss_curve, accuracy_curve, F1_curve, time_curve)
-        performance = (test_accuracy, test_F1, np.mean(time_curve))
+        training = (loss_curve, accuracy_curve, F1_curve,
+                    time_curve, accuracy_all_curve, F1_all_curve)
+        performance = (test_accuracy, test_F1, np.mean(
+            time_curve), test_accuracy_all, test_F1_all)
 
         return training, performance, sknn_nn
 
@@ -665,7 +690,7 @@ class UnifiedMLP(object):
     def _trim_data(frac, X, Y):
 
         n_samples = X.shape[0]
-        n_trimmed_samples = int(round(n_samples*frac))
+        n_trimmed_samples = int(round(n_samples * frac))
 
         return X[:n_trimmed_samples], Y[:n_trimmed_samples]
 
@@ -766,7 +791,7 @@ class _StratifiedRandomClassifier(object):
         accuracy = correct_predictions/all_predictions
         '''
 
-        return (self.weights**2 + (1.0 - self.weights)**2).mean()
+        return (self.weights**2 + (1.0 - self.weights)**2)
 
     def predict(self, X, Y):
         ''' Peeks at the correct answer in order to assign predictions which
@@ -796,18 +821,28 @@ class _StratifiedRandomClassifier(object):
 
 
 def getScores(answers, predictions):
-    ''' Returns the F1 score and simple score (percent correct).
+    ''' Returns the F1 score and simple accuracy score (percent correct).
+
         Requires predictions and answers in 0 and 1 int or bool format.
+        Returns arrays giving score per class.
     '''
+
     predicted_positives = (predictions == 1)
     true_positives = (predicted_positives & answers)
-    false_positives = (predicted_positives & np.logical_not(answers))
     correct_predictions = (predictions == answers)
 
-    precision = float(true_positives.sum()) / predicted_positives.sum()
-    recall = float(true_positives.sum()) / answers.sum()
-    F1 = (2 * precision * recall) / (precision + recall)
-    accuracy = float(correct_predictions.sum()) / \
-        (predictions.shape[0] * predictions.shape[1])
+    precision = true_positives.sum(axis=0).astype(float) /\
+        predicted_positives.sum(axis=0)
+    recall = true_positives.sum(axis=0).astype(float) /\
+        answers.sum(axis=0)
 
-    return accuracy, F1
+    F1 = (2 * precision * recall) / (precision + recall)
+
+    precision_all = float(true_positives.sum()) / predicted_positives.sum()
+    recall_all = float(true_positives.sum()) / answers.sum()
+    F1_all = (2 * precision_all * recall_all) / (precision_all + recall_all)
+
+    accuracy = correct_predictions.sum(
+        axis=0).astype(float) / predictions.shape[0]
+
+    return accuracy, F1, accuracy.mean(), F1_all
