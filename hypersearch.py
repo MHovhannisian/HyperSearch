@@ -216,7 +216,7 @@ class HyperSearch(object):
             warnings.warn(warnstr)
 
     def graph(self, x_axis='epoch', y_axis='accuracy', z_axis='accuracy',
-              lines=[], **vals):
+              x_log=False, y_log=False, lines=[], **vals):
 
         # Setup
 
@@ -230,20 +230,20 @@ class HyperSearch(object):
         # Call appropriate graphing function
 
         if x_axis == 'epoch':
-            self._training_graph(y_axis, lines, **vals)
+            self._training_graph(y_axis, x_log, lines, **vals)
         elif y_axis not in self.performance:
             try:
                 assert(not lines and z_axis in self.performance)
             except AssertionError:
                 raise AssertionError("For 3D graphs, the performance metric" +
                                      " should be on the z-axis and no seperate lines can be specified")
-            self._results_graph3D(x_axis, y_axis, z_axis, **vals)
+            self._results_graph3D(x_axis, y_axis, x_log, y_log, z_axis, **vals)
         else:
-            self._results_graph(x_axis, y_axis, lines, **vals)
+            self._results_graph(x_axis, y_axis, x_log, lines, **vals)
 
         return self
 
-    def _training_graph(self, y_axis='accuracy', lines=[], **vals):
+    def _training_graph(self, y_axis, x_log, lines=[], **vals):
         ''' Graph test/validation performance *per epoch*.
 
         Where the parameters `lines`, and `**vals` not been used to fully
@@ -305,10 +305,13 @@ class HyperSearch(object):
         plt.xlabel("Epoch")
         plt.ylabel(self.training_ylabels[y_axis])
 
+        if x_log:
+            plt.xscale('log')
+
         plt.legend(loc='best')
         plt.show()
 
-    def _results_graph(self, x_axis, y_axis='accuracy', lines=[], **vals):
+    def _results_graph(self, x_axis, y_axis, x_log, lines=[], **vals):
         ''' Produce a graph of a hyperparameter against a measure of performance.
 
         Where the parameters `lines`, and `**vals` not been used to fully
@@ -392,10 +395,13 @@ class HyperSearch(object):
         plt.xlabel(self.xlabels[x_axis])
         plt.ylabel(self.results_ylabels[y_axis])
 
+        if x_log:
+            plt.xscale('log')
+
         plt.legend(loc='best')
         plt.show()
 
-    def _results_graph3D(self, x_axis, y_axis, z_axis='accuracy', **vals):
+    def _results_graph3D(self, x_axis, y_axis, x_log, y_log, z_axis='accuracy', **vals):
         '''
         '''
 
@@ -431,6 +437,12 @@ class HyperSearch(object):
         ax.set_xlabel(self.xlabels[x_axis])
         ax.set_ylabel(self.xlabels[y_axis])
         ax.set_zlabel(self.results_ylabels[z_axis])
+
+        if x_log:
+            ax.xaxis.set_scale('log')
+
+        if y_log:
+            ax.yaxis.set_scale('log')
 
         plt.show()
 
