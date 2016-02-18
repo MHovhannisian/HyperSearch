@@ -3,7 +3,7 @@
 
 Map out a portion of hyperparameter space and plot graphs of slices of the space.
 
-Quickstart:
+Quick-start:
 
 * Do stuff
 
