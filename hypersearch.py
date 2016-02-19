@@ -6,6 +6,7 @@ import pickle
 import itertools
 import warnings
 import collections
+import sys
 
 # User-contributed modules
 import numpy as np
@@ -53,18 +54,19 @@ class HyperSearch(object):
             'module': 'Python module',
             'frac_training': 'Fraction training data used',
 
-            'hidden_layer_size': 'Number of hidden units',
+            'hidden_units': 'Number of hidden units',
             'activation': 'Activation function in hidden layer',
 
             'alpha': 'L2 penalty (alpha)',
             'dropout': 'Dropout (probability)',
 
-            'learning_rate': 'Initial learning rate',
+            'learning_rate': 'Learning rate',
             'algorithm': 'Learning algorithm',
             'batch_size': 'Samples per minibatch',
 
-            'momentum': 'SGD momentum term',
-            'nesterovs_momentum': 'Nesterov\'s momentum enabled',
+            'learning_decay': 'Per-epoch learning rate decay (SGD)',
+            'momentum': 'Momentum term (SGD)',
+            'nesterovs_momentum': 'Nesterov\'s momentum (SGD)',
 
             'beta_1': 'beta_1 parameter (Adam)',
             'beta_2': 'beta_2 parameter (Adam)',
@@ -72,11 +74,7 @@ class HyperSearch(object):
 
             'max_epoch': 'Maximum epochs before stopping',
             'epoch_tol': 'Tolerance on stopping criteria',
-
             'n_stable': 'Consecutive stable epochs before stopping',
-
-            'learning_decay': 'Per-epoch learning rate decay (SGD)',
-
             'early_stopping': 'Performance on validation data as stopping criterion'
         }
 
@@ -224,7 +222,7 @@ class HyperSearch(object):
         return vals
 
     def graph(self, x_axis='epoch', y_axis='accuracy', z_axis='accuracy',
-              x_log=False, y_log=False, **vals):
+              x_log=False, y_log=False, classes=None, **vals):
 
         # Setup
 
@@ -238,34 +236,41 @@ class HyperSearch(object):
             if item == '*':
                 dim = self._dim_names.index(key)
                 vals[key] = list(self._dim_vals[dim])
-            elif (isinstance(item, float) or isinstance(item, int)
-                    or isinstance(item, basestring)):
+            elif (isinstance(item, float) or isinstance(item, int) or
+                    isinstance(item, basestring)):
                 vals[key] = [item]
             elif hasattr(item, "__getitem__"):
                 pass
             else:
-                errstr = ("Pass hyperparams as either a raw value, a list of"
-                          + " raw values, or '*'.")
-                print item
+                errstr = ("Pass hyperparams as either a raw value, a list of" +
+                          " raw values, or '*'.")
                 raise TypeError(errstr)
 
-        # Call appropriate graphing function
+        if classes == '*':
+            classes = list(self.class_names)
+        elif isinstance(classes, basestring):
+            classes = [classes]
+        elif classes:
+            classes = [str(cls) for cls in classes]
+        else:
+            classes = []
 
+        # Call appropriate graphing function
         if x_axis == 'epoch':
-            self._training_graph(y_axis, x_log, **vals)
+            self._training_graph(y_axis, x_log, classes, **vals)
         elif y_axis not in self.performance:
             try:
                 assert(z_axis in self.performance)
             except AssertionError:
-                raise AssertionError("For 3D graphs, the performance metric" +
-                                     " should be on the z-axis and no seperate lines can be specified")
+                raise AssertionError("A performance metric must be on the" +
+                                     "y-axis or z-axis for 3D graphs.")
             self._results_graph3D(x_axis, y_axis, x_log, y_log, z_axis, **vals)
         else:
-            self._results_graph(x_axis, y_axis, x_log, **vals)
+            self._results_graph(x_axis, y_axis, x_log, classes, **vals)
 
         return self
 
-    def _training_graph(self, y_axis, x_log, **vals):
+    def _training_graph(self, y_axis, x_log, classes=[], **vals):
         ''' Graph test/validation performance *per epoch*.
 
         Where the parameters `lines`, and `**vals` not been used to fully
@@ -294,8 +299,7 @@ class HyperSearch(object):
             verbose=True
         )
 
-        y = []
-        ymaxlen = 0
+        max_epoch = 0
 
         # Set up multi-line plotting
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
@@ -309,20 +313,32 @@ class HyperSearch(object):
                 coords[lines_dims[i]] = idx
 
             if self.success[tuple(coords)]:
-                y = self.results[tuple(coords)]['training'][y_axis + "_all"]
-                ymaxlen = max(len(y), ymaxlen)
+                result = self.results[tuple(coords)]
 
-            # Plot
-            if y:
+                n_epochs = result['performance']['n_epochs']
+
+                if classes:
+                    y = [[result['training'][y_axis][i_epoch][i_cls]
+                        for i_epoch in range(n_epochs)]
+                            for i_cls in range(len(classes))]
+                else:
+                    y = result['training'][y_axis + "_all"]
+                n_epochs = max(len(y), n_epochs)
+
+            if classes and y[0]:
+                label = labels.next()
+                for i_cls, cls in enumerate(classes):
+                    plt.plot(y[i_cls], label="Class: {}; ".format(cls) + label)
+
+            # Plot one line -- overall results.
+            elif not classes and y:
                 plt.plot(y, label=labels.next())
             else:
                 print 'No data for "' + labels.next() + '"'
 
-            y = []
-
         try:
             bench = self.MLP.benchmark[y_axis + "_all"]
-            plt.plot([0, ymaxlen - 1], [bench, bench],
+            plt.plot([0, n_epochs - 1], [bench, bench],
                      '-.', label="Stratified Random")
         except KeyError:
             pass
@@ -330,13 +346,15 @@ class HyperSearch(object):
         plt.xlabel("Epoch")
         plt.ylabel(self.training_ylabels[y_axis])
 
+        plt.xlim(0, n_epochs - 1)
+
         if x_log:
             plt.xscale('log')
 
         plt.legend(loc='best')
         plt.show()
 
-    def _results_graph(self, x_axis, y_axis, x_log, **vals):
+    def _results_graph(self, x_axis, y_axis, x_log, classes=[], **vals):
         ''' Produce a graph of a hyperparameter against a measure of performance.
 
         Where the parameters `x_axis`, and `**vals` not been used to fully
@@ -372,15 +390,21 @@ class HyperSearch(object):
 
         x_axis_dim = self._dim_names.index(x_axis)
         x_master = self._dim_vals[x_axis_dim]
-        x, y = [], []
 
         # Deal with categorical (non-numeric) x axis
         try:
-            x_master[0] - 1.0
+            x_master[0] - 1.0  # Trigger TypeError on categoricals
             categories = []
+            marker = "+"
+            ls = '-'
+            border = 0.0
         except TypeError:
             categories = list(x_master)
             x_master = range(len(categories))
+            plt.xticks(x_master, categories)
+            marker = 'o'
+            ls = '--'
+            border = 0.5
 
         # Set up a line for all combinations in vals
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
@@ -389,30 +413,41 @@ class HyperSearch(object):
         # Plotting loop
         for line_idxs in line_idx_groups:
 
+            x = []
+            y = [[] for i in range(len(classes))]
+
             # Set coords specific to this line
             for i, idx in enumerate(line_idxs):
                 coords[lines_dims[i]] = idx
 
             # Step along coords of the x-axis and set y values.
-            for i in range(len(x_master)):
-                coords[x_axis_dim] = i
+            for xaxis_idx in range(len(x_master)):
+                coords[x_axis_dim] = xaxis_idx
                 if self.success[tuple(coords)]:
                     result = self.results[tuple(coords)]
-                    y.append(result['performance'][y_axis + "_all"])
-                    x.append(x_master[i])
 
-            # Plot
-            if y:
-                if categories:
-                    # Dummy numerical system with dashed lines
-                    plt.plot(x, y, 'o--', label=labels.next())
-                    plt.xticks(x_master, categories)
-                else:
-                    plt.plot(x, y, label=labels.next())
+                    # Record either overall values or per-class
+                    if classes:
+                        for i_cls, cls in enumerate(classes):
+                            y[i_cls].append(result['performance'][y_axis][i_cls])
+                    else:
+                        y.append(result['performance'][y_axis + "_all"])
+                    x.append(x_master[xaxis_idx])
+
+            # Plot each class
+            if classes and y[0]:
+                label = labels.next()
+                for i_cls, cls in enumerate(classes):
+                    plt.plot(x, y[i_cls],
+                        marker=marker,
+                        linestyle=ls,
+                        label="Class: {}; ".format(cls) + label)
+
+            # Plot one line -- overall results.
+            elif not classes and y:
+                plt.plot(x, y, marker=marker, linestyle=ls, label=labels.next())
             else:
                 print 'No data for "' + labels.next() + '"'
-
-            x, y = [], []
 
         try:
             bench = self.MLP.benchmark[y_axis + "_all"]
@@ -423,6 +458,8 @@ class HyperSearch(object):
 
         plt.xlabel(self.xlabels[x_axis])
         plt.ylabel(self.results_ylabels[y_axis])
+
+        plt.xlim(x_master[0] - border, x_master[-1] + border)
 
         if x_log:
             plt.xscale('log')
@@ -438,9 +475,8 @@ class HyperSearch(object):
         coords = list(n_argmax(self.accuracy_all, 1)[0])
 
         # Update vals dict to contain autoset values; also print warning
-        specified = vals.keys()
         vals = self._autoset_vals(
-            [x_axis]+[y_axis],
+            [x_axis] + [y_axis],
             vals,
             coords,
             verbose=True
@@ -451,7 +487,12 @@ class HyperSearch(object):
 
         y_axis_dim = self._dim_names.index(y_axis)
         y = self._dim_vals[y_axis_dim]
-        x_mesh, y_mesh = np.meshgrid(x, y)
+
+        try:
+            x_mesh, y_mesh = np.meshgrid(x, y)
+        except TypeError:
+            errstr = 'Cannot plot 3D graphs with categorical hyperparameters'
+            raise TypeError(errstr)
 
         z_mesh = np.empty_like(y_mesh, dtype=float)
 
@@ -476,7 +517,8 @@ class HyperSearch(object):
 
         cmap = sns.cubehelix_palette(light=1, as_cmap=True)
 
-        ax.plot_surface(x_mesh, y_mesh, z_mesh, cmap=cmap, rstride=1, cstride=1)
+        ax.plot_surface(x_mesh, y_mesh, z_mesh,
+                        cmap=cmap, rstride=1, cstride=1)
         ax.set_xlabel(self.xlabels[x_axis])
         ax.set_ylabel(self.xlabels[y_axis])
         ax.set_zlabel(self.results_ylabels[z_axis])
@@ -520,41 +562,12 @@ class HyperSearch(object):
 
         return dims, line_idx_groups, line_val_groups
 
-    def _get_fixed_coords(self, fixed_vals):
-        ''' Returns coordinates for taking slices of the data.
-
-        For viewing slices of the data, selects the fixed values of the
-        hyperparameters orthogonal to the slice. Selects the coordinates of the
-        maximum-accuracy hyperparameter combination, then overwrites this
-        with any constraints provided by user-provided fixed_vals dict.
-
-        Parameters
-        ----------
-
-        fixed_vals : dict
-            Specifies constraints on the fixed value.
-
-            e.g. {"dropout": 0.5} to take the slice where "dropout" is held
-            constant at 0.5.
-
-        Returns
-        -------
-
-        fixed_coords : list
-            Selected co-ordinates. Functions using this are expected to
-            overwrite the co-ordinates in the direction of the slice.
-
-        '''
-
-        # Obtain coordinates of the global accuracy maximum
-
-        return fixed_coords
-
     @staticmethod
     def _line_label(hyper_names, hyper_val_sets, specified):
         ''' Produce label differentiating lines in a 2D graph. '''
 
         for hyper_vals in hyper_val_sets:
+
             label = ""
 
             for name, val in zip(hyper_names, hyper_vals):
@@ -592,14 +605,17 @@ class HyperSearch(object):
         print "-------------------"
         print
 
+        dim_len = max_print_len(self._dim_names, 14)
+        fmt_prefix = "{0:" + dim_len + "} | "
+
         if not self.search:
             print "Fresh HyperSearch instance. No search parameters given yet."
         else:
             print "Configured hyperparameter search:"
 
-            print "{0:14} | {1:3} | Range".format("Hyperparameter", "N", "High val", "Low val")
+            print (fmt_prefix + "{1:>3} | Range").format("Hyperparameter", "N", "High val", "Low val")
             for name, values, in zip(self._dim_names, self._dim_vals):
-                line = "{0:14} | {1:3} | ".format(name, len(values))
+                line = (fmt_prefix + "{1:>3} | ").format(name, len(values))
                 try:
                     values[0] - 1.0  # Fail if categorical data.
                     line += "{:.3} to {:.3}".format(values[0], values[-1])
@@ -610,21 +626,21 @@ class HyperSearch(object):
                 finally:
                     print line
 
-            print "{0:19} = {1:>2} models".format(" ", np.prod(self._dims))
+            print "{0:22} = {1:>2} models".format(" ", np.prod(self._dims))
 
             self._show_errs(self.errs)
 
             print
 
             if self.ran.all():
-                self._show_perf_summary(class_split=class_split)
+                self._show_perf_summary(fmt_prefix, class_split=class_split)
 
             else:
                 print "The hyperparameter search is incomplete."
 
         return self
 
-    def _show_perf_summary(self, class_split=False, n=3):
+    def _show_perf_summary(self, fmt_prefix, class_split=False, n=3):
 
         try:
             assert(np.prod(self._dims) >= n)
@@ -635,13 +651,13 @@ class HyperSearch(object):
         # Hyperparameters of top models
         print "Top models:"
         coord_sets = n_argmax(self.accuracy_all, n=n)
-        print "{0:14} | {1:9}".format("Hyperparameter", "Benchmark"),
+        print (fmt_prefix + "{1:9}").format("Hyperparameter", "Benchmark"),
         for i in range(n):
             print "| {:7}".format("Model " + str(i + 1)),
         print
 
         for i, (name, values) in enumerate(zip(self._dim_names, self._dim_vals)):
-            print "{0:14} | {1:>9}".format(name, "-"),
+            print (fmt_prefix + "{1:>9}").format(name, "-"),
             try:  # Fail if categorical data.
                 for j in range(n):
                     print "| {:>7.3g}".format(values[coord_sets[j][i]]),
@@ -653,12 +669,12 @@ class HyperSearch(object):
 
         # Performance measures of top models
         print
-        print "{0:14} | {1:9}".format("Performance", "Benchmark"),
+        print (fmt_prefix + "{1:9}").format("Performance", "Benchmark"),
         for i in range(n):
             print "| {:7}".format("Model " + str(i + 1)),
         print
         for perf in self.performance:
-            print "{0:14} | {1:9.3}".format(perf, self.MLP.benchmark[perf + '_all']),
+            print (fmt_prefix + "{1:9.3}").format(perf, self.MLP.benchmark[perf + '_all']),
             for j in range(n):
                 perf_vals = self.results[coord_sets[j]]['performance']
                 print ("| {0:7.3f}".  format(perf_vals[perf + "_all"])),
@@ -667,12 +683,22 @@ class HyperSearch(object):
 
 def ar_index(arr, value):
 
-    try:  # Works for non-categorical
+    try:  # Works for non-categorical; necessary for float
         idx = np.isclose(arr, value).nonzero()[0][0]
     except TypeError:
         idx = (arr == value).nonzero()[0][0]
 
     return idx
+
+
+def max_print_len(elems, min_len=0):
+
+    max_len = min_len
+
+    for elem in elems:
+        max_len = max(max_len, len(str(elem)))
+
+    return str(max_len)
 
 
 def n_argmax(arr, n=1):
@@ -688,7 +714,7 @@ def n_argmax(arr, n=1):
     coords = []
     vals = []
 
-    minval = np.array(arr).min()
+    min_val = np.array(arr).min()
 
     for i in range(n):
         # Find global maximum
@@ -699,7 +725,7 @@ def n_argmax(arr, n=1):
         vals.append(arr[max_coords])
 
         # Set value equal to minimum value so it won't be found next time.
-        arr[max_coords] = minval
+        arr[max_coords] = min_val
 
     # Reset modified values in arr
     for coord, val in zip(coords, vals):

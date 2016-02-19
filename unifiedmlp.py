@@ -59,7 +59,7 @@ class UnifiedMLP(object):
         ##################
         #  Architecture  #
         ##################
-        'hidden_layer_size': 15,  # !!
+        'hidden_units': 15,  # !!
         'activation': 'relu',
 
         ####################
@@ -220,7 +220,7 @@ class UnifiedMLP(object):
                 "The learning_decay option is for the sgd algorithm only.")
 
     def get_hypers(self):
-        ''' Return neural network hyperparameters
+        ''' Return neural network hyperparameters.
 
         Returns
         -------
@@ -231,7 +231,7 @@ class UnifiedMLP(object):
         return dict(self._nn_hypers)
 
     def set_hypers(self, **new_settings):
-        ''' Update and re-validate the neural network hyperparameters dict
+        ''' Set the hyperparameters with which neural networks are built.
 
         Takes keyword arguments.
 
@@ -250,6 +250,9 @@ class UnifiedMLP(object):
 
             elif type(new_settings[key]) == np.string_:
                 new_settings[key] = str(new_settings[key])
+
+            elif type(new_settings[key]) == np.bool_:
+                new_settings[key] = bool(new_settings[key])
 
         self._nn_hypers.update(new_settings)
         self._validate_settings()
@@ -289,7 +292,8 @@ class UnifiedMLP(object):
                                   'F1': performance[1],
                                   'time_all': performance[2],
                                   'accuracy_all': performance[3],
-                                  'F1_all': performance[4]
+                                  'F1_all': performance[4],
+                                  'n_epochs': performance[5]
                                  }
 
         return results, model
@@ -312,11 +316,11 @@ class UnifiedMLP(object):
             raise KeyError(err_str)
 
         # Callback for SGD learning rate decline
-        n_epoch = [0]
+        ii_epoch = [0]
 
         def learning_schedule(epoch):
             init = self._nn_hypers['learning_rate']
-            factor = (1 - self._nn_hypers['learning_decay'])**n_epoch[0]
+            factor = (1 - self._nn_hypers['learning_decay'])**ii_epoch[0]
             lr = factor * init
             return lr
 
@@ -327,7 +331,7 @@ class UnifiedMLP(object):
         keras_nn = Sequential()
 
         keras_nn.add(Dense(
-            self._nn_hypers['hidden_layer_size'],
+            self._nn_hypers['hidden_units'],
             input_dim=self.n_features,
             init='lecun_uniform',
             W_regularizer=l2(self._nn_hypers['alpha']),
@@ -385,8 +389,8 @@ class UnifiedMLP(object):
         X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
                                            self.X_train, self.Y_train)
 
-        for i in range(self._nn_hypers['max_epoch']):
-            n_epoch[0] = i
+        for i_epoch in range(self._nn_hypers['max_epoch']):
+            ii_epoch[0] = i_epoch
 
             start_time = timeit.default_timer()
 
@@ -434,11 +438,12 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
+        n_epochs = i_epoch + 1
 
         training = (loss_curve, accuracy_curve, F1_curve,
                     time_curve, accuracy_all_curve, F1_all_curve)
         performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all)
+            time_curve), test_accuracy_all, test_F1_all, n_epochs)
 
         return training, performance, keras_nn
 
@@ -473,7 +478,7 @@ class UnifiedMLP(object):
 
         sklearn_settings.update({
             'n_labels': self.n_labels_sklearn,
-            'hidden_layer_sizes': (self._nn_hypers['hidden_layer_size']),
+            'hidden_layer_sizes': (self._nn_hypers['hidden_units']),
             'learning_rate_init': self._nn_hypers['learning_rate'],
             'learning_rate': 'constant',
             'max_iter': 1,
@@ -504,7 +509,7 @@ class UnifiedMLP(object):
         X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
                                            self.X_train, self.Y_train)
 
-        for i in range(self._nn_hypers['max_epoch']):
+        for i_epoch in range(self._nn_hypers['max_epoch']):
             try:
                 start_time = timeit.default_timer()
 
@@ -547,11 +552,12 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
+        n_epochs = i_epoch + 1
 
         training = (loss_curve, accuracy_curve, F1_curve,
                     time_curve, accuracy_all_curve, F1_all_curve)
         performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all)
+            time_curve), test_accuracy_all, test_F1_all, n_epochs)
 
         return training, performance, sklearn_nn
 
@@ -604,7 +610,7 @@ class UnifiedMLP(object):
         sknn_nn = sknn_MLPClassifier(
 
             # Architecture
-            layers=[Layer(activation, units=self._nn_hypers['hidden_layer_size'],),
+            layers=[Layer(activation, units=self._nn_hypers['hidden_units'],),
                     Layer("Softmax", units=2 * self.n_classes)],
 
             # Learning settings
@@ -643,7 +649,7 @@ class UnifiedMLP(object):
         X_train, Y_train = self._trim_data(self._nn_hypers['frac_training'],
                                            self.X_train, self.Y_train)
 
-        for i in range(self._nn_hypers['max_epoch']):
+        for i_epoch in range(self._nn_hypers['max_epoch']):
             start_time = timeit.default_timer()
 
             sknn_nn.fit(X_train, Y_train)
@@ -678,11 +684,12 @@ class UnifiedMLP(object):
         test_predict = self._predict_from_proba(test_proba)
         test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
+        n_epochs = i_epoch + 1
 
         training = (loss_curve, accuracy_curve, F1_curve,
                     time_curve, accuracy_all_curve, F1_all_curve)
         performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all)
+            time_curve), test_accuracy_all, test_F1_all, n_epochs)
 
         return training, performance, sknn_nn
 
