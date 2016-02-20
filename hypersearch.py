@@ -263,7 +263,7 @@ class HyperSearch(object):
                 assert(z_axis in self.results_ylabels.keys())
             except AssertionError:
                 raise AssertionError("A performance metric must be on the" +
-                             " y-axis for 2D graphs or z-axis for 3D graphs.")
+                                     " y-axis for 2D graphs or z-axis for 3D graphs.")
             self._results_graph3D(x_axis, y_axis, x_log, y_log, z_axis, **vals)
         else:
             self._results_graph(x_axis, y_axis, x_log, classes, **vals)
@@ -302,7 +302,7 @@ class HyperSearch(object):
 
         # Set up multi-line plotting
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
-        labels = self._line_label(vals, line_val_groups)
+        labels = self._line_setup(vals, line_val_groups, classes)
 
         ########################
         #  Main plotting loop  #
@@ -322,15 +322,17 @@ class HyperSearch(object):
                 if classes:
                     try:
                         y = [[result['training'][y_axis][i_epoch][self.cls.index(c)]
-                            for i_epoch in range(n_epochs)]
-                                for c in classes]
+                              for i_epoch in range(n_epochs)]
+                             for c in classes]
                     except KeyError:  # No per-class data for "time"
                         err = 'No per-class data for y-axis = ' + str(y_axis)
                         raise KeyError(err)
 
                     label = labels.next()
                     for i_c, c in enumerate(classes):
-                        plt.plot(y[i_c], label="Class: {}; ".format(c) + label)
+                        plt.plot(y[i_c],
+                                 label="Class: {}; ".format(c) + label,
+                                 )
 
                 else:
                     y = result['training'][y_axis + "_all"]
@@ -405,7 +407,7 @@ class HyperSearch(object):
 
         # Set up a line for all combinations in vals
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
-        labels = self._line_label(vals, line_val_groups)
+        labels = self._line_setup(vals, line_val_groups, classes)
 
         # Plotting loop
         for line_idxs in line_idx_groups:
@@ -428,9 +430,11 @@ class HyperSearch(object):
                     if classes:
                         for i_c, c in enumerate(classes):
                             try:
-                                y[i_c].append(result['performance'][y_axis][self.cls.index(c)])
+                                y[i_c].append(result['performance'][
+                                              y_axis][self.cls.index(c)])
                             except KeyError:  # Time/n_epochs aren't per-class.
-                                err = 'No per-class data for y-axis = ' + str(y_axis)
+                                err = 'No per-class data for y-axis = ' + \
+                                    str(y_axis)
                                 raise KeyError(err)
                     else:
                         y.append(result['performance'][y_axis + "_all"])
@@ -441,13 +445,14 @@ class HyperSearch(object):
                 label = labels.next()
                 for i_c, c in enumerate(classes):
                     plt.plot(x, y[i_c],
-                        marker=marker,
-                        linestyle=ls,
-                        label="Class: {}; ".format(c) + label)
+                             marker=marker,
+                             linestyle=ls,
+                             label="Class: {}; ".format(c) + label)
 
             # Plot one line -- overall results.
             elif not classes and y:
-                plt.plot(x, y, marker=marker, linestyle=ls, label=labels.next())
+                plt.plot(x, y, marker=marker,
+                         linestyle=ls, label=labels.next())
             else:
                 print 'No data for "' + labels.next() + '"'
 
@@ -530,17 +535,18 @@ class HyperSearch(object):
 
     def _add_bench(self, plt, y_axis, classes, x_high):
 
-        if classes:
-            for c in classes:
-                bench = self.MLP.benchmark[y_axis][self.cls.index(c)]
+        if self.MLP.benchmark[y_axis + "_all"] != 0:
+
+            if classes:
+                for c in classes:
+                    bench = self.MLP.benchmark[y_axis][self.cls.index(c)]
+                    plt.plot([0, x_high], [bench, bench],
+                             '-.', label="[Benchmark] Class: {}".format(c))
+
+            else:
+                bench = self.MLP.benchmark[y_axis + "_all"]
                 plt.plot([0, x_high], [bench, bench],
-                        '-.', label="[Benchmark] Class: {}".format(c))
-
-        else:
-            bench = self.MLP.benchmark[y_axis + "_all"]
-            plt.plot([0, x_high], [bench, bench],
-                     '-.', label="Stratified Random")
-
+                         '-.', label="Stratified Random")
 
     def _multiline(self, vals):
         ''' Set up iterables for plotting multiple lines on one xy graph.
@@ -574,9 +580,16 @@ class HyperSearch(object):
         return dims, line_idx_groups, line_val_groups
 
     @staticmethod
-    def _line_label(vals, val_groups):
+    def _line_setup(vals, val_groups, classes):
         ''' Produce label differentiating lines in a 2D graph. '''
         ranged_vals = [key for key, val in vals.items() if len(val) > 1]
+
+        n_lines = reduce(lambda x, y: x * y,
+                         [len(val) for val in vals.values()])
+        if classes:
+            n_lines *= len(classes)
+
+        sns.set_palette("husl", n_lines)
 
         for hyper_vals in val_groups:
 
@@ -625,7 +638,8 @@ class HyperSearch(object):
         else:
             print "Configured hyperparameter search:"
 
-            print (fmt_prefix + "{1:>3} | Range").format("Hyperparameter", "N", "High val", "Low val")
+            print (fmt_prefix + "{1:>3} | Range").format("Hyperparameter", "N",
+                                                         "High val", "Low val")
             for name, values, in zip(self._dim_names, self._dim_vals):
                 line = (fmt_prefix + "{1:>3} | ").format(name, len(values))
                 try:
@@ -686,13 +700,14 @@ class HyperSearch(object):
             print "| {:7}".format("Model " + str(i + 1)),
         print
 
-        specifiers = ['.3f']*3 + ['d']
+        specifiers = ['.3f'] * 3 + ['d']
 
         for perf, spec in zip(self.results_ylabels.keys(), specifiers):
-            print (fmt_prefix + "{1:9" + spec + "}").format(perf, self.MLP.benchmark[perf + '_all']),
+            print (fmt_prefix + "{1:9" + spec + "}").\
+                format(perf, self.MLP.benchmark[perf + '_all']),
             for j in range(n):
                 perf_vals = self.results[coord_sets[j]]['performance']
-                print ("| {0:7" + spec + "}").  format(perf_vals[perf + "_all"]),
+                print ("| {0:7" + spec + "}").format(perf_vals[perf + "_all"]),
             print
 
 
@@ -700,7 +715,7 @@ def ar_idx(arr, value):
 
     try:  # Necessary for float
         idx = np.isclose(arr, value).nonzero()[0][0]
-    except TypeError: # Categorical
+    except TypeError:  # Categorical
         idx = (arr == value).nonzero()[0][0]
 
     return idx
