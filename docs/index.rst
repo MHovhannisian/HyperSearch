@@ -15,8 +15,7 @@ Contents:
 
     install
     tutorial
-    settings_reference
+    hyperparameter_reference
     module_unifiedmlp
     module_hypersearch
-
 
