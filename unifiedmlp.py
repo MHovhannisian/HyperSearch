@@ -156,7 +156,8 @@ class UnifiedMLP(object):
             'accuracy': accuracy,
             'F1_all': F1_all,
             'accuracy_all': accuracy_all,
-            'time_all': 0.0
+            'time_all': 0.0,
+            'n_epochs_all': 0
         }
 
     @staticmethod
@@ -293,7 +294,7 @@ class UnifiedMLP(object):
                                   'time_all': performance[2],
                                   'accuracy_all': performance[3],
                                   'F1_all': performance[4],
-                                  'n_epochs': performance[5]
+                                  'n_epochs_all': performance[5]
                                  }
 
         return results, model
@@ -311,9 +312,9 @@ class UnifiedMLP(object):
         try:
             activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self._nn_hypers['activation']
-            err_str += "\" unsupported."
-            raise KeyError(err_str)
+            err = "Activation function \"" + self._nn_hypers['activation']
+            err += "\" unsupported."
+            raise KeyError(err)
 
         # Callback for SGD learning rate decline
         ii_epoch = [0]
@@ -367,9 +368,9 @@ class UnifiedMLP(object):
             optimiser = Adadelta()  # Recommended to use the default values
             callbacks = []
         else:
-            err_str = "Learning algorithm \"" + self._nn_hypers['algorithm']
-            err_str += "\" not implemented."
-            raise KeyError(err_str)
+            err = "Learning algorithm \"" + self._nn_hypers['algorithm']
+            err += "\" not implemented."
+            raise KeyError(err)
 
         keras_nn.compile(loss='binary_crossentropy', optimizer=optimiser)
 
@@ -461,11 +462,11 @@ class UnifiedMLP(object):
         bad_settings = [self._nn_hypers[key] > 0 for key in unsupported_keys]
 
         if any(bad_settings):
-            err_str = "Unsupported settings: "
+            err = "Unsupported settings: "
             for i, key in enumerate(unsupported_keys):
                 if bad_settings[i]:
-                    err_str += key + ", "
-            raise KeyError(err_str[:-2])
+                    err += key + ", "
+            raise KeyError(err[:-2])
 
         valid_keys = [
             'activation', 'alpha', 'batch_size', 'random_state', 'shuffle',
@@ -572,9 +573,9 @@ class UnifiedMLP(object):
         try:
             activation = activation_dict[self._nn_hypers['activation']]
         except KeyError:
-            err_str = "Activation function \"" + self._nn_hypers['activation']
-            err_str += "\" not supported."
-            raise KeyError(err_str)
+            err = "Activation function \"" + self._nn_hypers['activation']
+            err += "\" not supported."
+            raise KeyError(err)
 
         if self._nn_hypers['algorithm'] == 'sgd':
             learning_rate = self._nn_hypers['learning_rate']
@@ -588,9 +589,9 @@ class UnifiedMLP(object):
             learning_rule = 'adadelta'
             learning_rate = 1.0  # Recommended to always use default values here
         else:
-            err_str = "The algorithm " + self._nn_hypers['algorithm'] +\
+            err = "The algorithm " + self._nn_hypers['algorithm'] +\
                 " is not supported."
-            raise KeyError(err_str)
+            raise KeyError(err)
 
         if self._nn_hypers['learning_decay'] != 0.0:
             raise KeyError("SGD learning decay not supported.")
