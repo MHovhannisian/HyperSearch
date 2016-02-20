@@ -75,7 +75,9 @@ class HyperSearch(object):
             'max_epoch': 'Maximum epochs before stopping',
             'epoch_tol': 'Tolerance on stopping criteria',
             'n_stable': 'Consecutive stable epochs before stopping',
-            'early_stopping': 'Performance on validation data as stopping criterion'
+            'early_stopping': 'Performance on validation data as stopping criterion',
+
+            'epoch' : 'Epoch'
         }
 
         self.errs = collections.Counter()
@@ -233,6 +235,12 @@ class HyperSearch(object):
         # Homogenise inputs into a list of raw vals.
         # Careful typing here to avoid ambiguities
         for key, item in vals.items():
+            try:  # Basic validation
+                assert(key != x_axis)
+            except AssertionError:
+                err = "A keyword argument is the same as the x_axis dimension."
+                raise AssertionError(err)
+
             if item == '*':
                 dim = self._dim_names.index(key)
                 vals[key] = list(self._dim_vals[dim])
@@ -341,18 +349,21 @@ class HyperSearch(object):
             else:
                 print 'No data for "' + labels.next() + '"'
 
-        self._add_bench(plt, y_axis, classes, max_epoch - 1)
+        self._add_bench(plt, y_axis, classes)
+        self._2D_graph_settings(plt, "epoch", y_axis, x_log, (0, max_epoch - 1))
+        plt.show()
 
-        plt.xlabel("Epoch")
-        plt.ylabel(self.training_ylabels[y_axis])
+    def _2D_graph_settings(self, plt, x_label, y_label, x_log, xlims):
 
-        plt.xlim(0, max_epoch - 1)
+        plt.xlabel(self.xlabels[x_label])
+        plt.ylabel(self.training_ylabels[y_label])
+        plt.legend(loc='best')
+        plt.xlim(*xlims)
 
         if x_log:
             plt.xscale('log')
 
-        plt.legend(loc='best')
-        plt.show()
+        plt.tight_layout()
 
     def _results_graph(self, x_axis, y_axis, x_log, classes=[], **vals):
         ''' Produce a graph of a hyperparameter against a measure of performance.
@@ -402,7 +413,7 @@ class HyperSearch(object):
             x_master = range(len(categories))
             plt.xticks(x_master, categories)
             marker = 'o'
-            ls = '--'
+            ls = ':'
             border = 0.5
 
         # Set up a line for all combinations in vals
@@ -456,18 +467,12 @@ class HyperSearch(object):
             else:
                 print 'No data for "' + labels.next() + '"'
 
-        self._add_bench(plt, y_axis, classes, x_master[-1])
+        self._add_bench(plt, y_axis, classes)
+        xlims = (x_master[0] - border, x_master[-1] + border)
+        self._2D_graph_settings(plt, x_axis, y_axis, x_log, xlims)
 
-        plt.xlabel(self.xlabels[x_axis])
-        plt.ylabel(self.results_ylabels[y_axis])
-
-        plt.xlim(x_master[0] - border, x_master[-1] + border)
-
-        if x_log:
-            plt.xscale('log')
-
-        plt.legend(loc='best')
         plt.show()
+
 
     def _results_graph3D(self, x_axis, y_axis, x_log, y_log, z_axis='accuracy', **vals):
         '''
@@ -533,20 +538,20 @@ class HyperSearch(object):
 
         plt.show()
 
-    def _add_bench(self, plt, y_axis, classes, x_high):
+    def _add_bench(self, plt, y_axis, classes):
 
         if self.MLP.benchmark[y_axis + "_all"] != 0:
 
             if classes:
                 for c in classes:
                     bench = self.MLP.benchmark[y_axis][self.cls.index(c)]
-                    plt.plot([0, x_high], [bench, bench],
-                             '-.', label="[Benchmark] Class: {}".format(c))
+                    plt.plot([-sys.maxint, sys.maxint], [bench, bench],
+                            '--', label="[Benchmark] Class: {}".format(c))
 
             else:
                 bench = self.MLP.benchmark[y_axis + "_all"]
-                plt.plot([0, x_high], [bench, bench],
-                         '-.', label="Stratified Random")
+                plt.plot([-sys.maxint, sys.maxint], [bench, bench],
+                         linestyle='--', label="Stratified Random")
 
     def _multiline(self, vals):
         ''' Set up iterables for plotting multiple lines on one xy graph.
