@@ -20,8 +20,61 @@ import unifiedmlp
 
 
 class HyperSearch(object):
+    ''' Perform hyperparameter grid-search over multiple MLP implementations.
+
+    Parameters
+    ----------
+
+    X : array-like, shape (n_samples, n_features)
+        Vectors of features for each sample, where there are n_samples vectors
+        each with n_features elements.
+
+    Y : array-like, shape (n_samples, n_classes)
+        Vectors of labelled outcomes for each sample. UnifiedMLP expects a
+        boolean or binary array specifying membership to each of n_classes
+        classes.
+
+    class_names : list, shape (n_classes)
+        Ordered list of names by which to refer to each outcome class for
+        per-class outputting of neural network performance.
+
+    split : tuple of 3 entries, summing to 1.0 or less.
+        The split of data between training, validation and testing. Training
+        data is passed to fit() methods, validation data is used to track
+        fitting progress and can be used for early stopping, and test data is
+        used for the final evaluation of model quality.
+
+    Examples
+    --------
+
+    >>> hs = HyperSearch(X, Ys, class_names=class_names)
+    >>> hs.set_fixed(algorithm='adam')
+    >>> hs.set_search(
+    ...     module=['keras', 'sklearn'],
+    ...     dropout=np.arange(0.0, 1.0, 0.2),
+    ...     batch_size=range(12, 100, 24),
+    ...     hidden_units=[10, 15]
+    ... )
+    Registered 80 tests to run.
+    >>> hs.run_tests(ignore_failure=True).save()
+    Some tests failed due to incompatible settings:
+    Module  | Count | Error message
+    sklearn |    32 | Unsupported settings: dropout
+    [...]
+
+    >>> hs = HyperSearch.load().summary()
+    [...]
+    >>> hs.graph(y_axis="accuracy", x_axis="dropout", batch_size='*')
+    hypersearch.py:331: UserWarning: Unspecified parameters were automatically fixed:
+        hidden_units: 10
+        module: keras
+
+    '''
 
     def __init__(self, X, Y, class_names=[], split=(0.70, 0.15, 0.15)):
+
+        X = np.array(X).astype('float64')
+        Y = np.array(Y).astype(bool)
 
         self.n_classes = Y.shape[1]
 
@@ -60,8 +113,8 @@ class HyperSearch(object):
             'alpha': 'L2 penalty (alpha)',
             'dropout': 'Dropout (probability)',
 
-            'learning_rate': 'Learning rate',
             'algorithm': 'Learning algorithm',
+            'learning_rate': 'Learning rate',
             'batch_size': 'Samples per minibatch',
 
             'learning_decay': 'Per-epoch learning rate decay (SGD)',
@@ -83,13 +136,53 @@ class HyperSearch(object):
         self.errs = collections.Counter()
 
     def set_fixed(self, **hypers):
-        assert(not self.fixed)
+        ''' Set hyperparameters to keep constant through the parameter sweep.
+
+        Returns
+        -------
+
+        self
+
+        Examples
+        --------
+
+        >>> hs.set_fixed(module='sklearn')
+
+        >>> hs.set_fixed(module='keras', hidden_units=20)
+
+        >>> fixed_settings_dict = {'module': 'keras', 'algorithm': 'adam'}
+        >>> hs.set_fixed(**fixed_settings_dict)
+        '''
+
         self.fixed = True
         self.MLP.set_hypers(**hypers)
 
         return self
 
     def set_search(self, **hypers):
+        ''' Set hyperparameter ranges to search over.
+
+        Can only be run once per instance.
+
+        Returns
+        -------
+
+        self
+
+        Examples
+        --------
+
+        >>> import numpy as np
+        >>> from hypersearch import HyperSearch
+        >>> hs = HyperSearch(X, Y)
+        >>> hs.set_search(
+        ...     module=['sknn', 'keras', 'sklearn'],
+        ...     dropout=np.arange(0.1, 1.0, 0.1),
+        ...     algorithm=['adam', 'adadelta']
+        ... )
+        Registered 60 tests to run.
+
+        '''
         assert(not self.search)
         self.search = True
 
@@ -117,10 +210,28 @@ class HyperSearch(object):
         self.F1 = np.zeros(tuple(self._dims) + tuple([self.n_classes]),
                            dtype=float)
 
+        print "Registered", np.prod(self._dims), "tests to run."
+
         return self
 
-    def run_tests(self, ignore_failure=False):
-        ''' Execute the specified parameter search. '''
+    def run_tests(self, ignore_failure=True):
+        ''' Execute the specified parameter search.
+
+        Parameters
+        ----------
+
+        ignore_failure: bool
+            Continue past tests which fail due to incompatible settings. If
+            True, missing data will be automatically excluded from graphs
+            and made clear in csv outputs. Errors raised will be printed for
+            review at the end.
+
+        Returns
+        -------
+
+        self
+
+        '''
 
         try:
             assert (self.search)
@@ -225,6 +336,18 @@ class HyperSearch(object):
 
     def graph(self, x_axis='epoch', y_axis='accuracy', z_axis='accuracy',
               x_log=False, y_log=False, classes=None, **vals):
+        ''' Visualise a slice of the data through a graph.
+
+        Examples
+        --------
+
+        >>> hs.graph(y_axis="accuracy", x_axis="dropout", batch_size='*')
+        >>> hs.graph(y_axis="time", x_axis="epoch", module='sklearn', dropout=0.0, hidden_units='*')
+        >>> hs.graph(y_axis="F1", x_axis="epoch", classes=['brown_hair', 'over35', 'city_dweller'])
+        >>> hs.graph(y_axis="n_epochs", x_axis="batch_size")
+        >>> hs.graph(y_axis="dropout", x_axis="batch_size")
+
+        '''
 
         # Setup
 
@@ -235,7 +358,7 @@ class HyperSearch(object):
         # Homogenise inputs into a list of raw vals.
         # Careful typing here to avoid ambiguities
         for key, item in vals.items():
-            try:  # Basic validation
+            try:
                 assert(key != x_axis)
             except AssertionError:
                 err = "A keyword argument is the same as the x_axis dimension."
@@ -353,18 +476,6 @@ class HyperSearch(object):
         self._2D_graph_settings(plt, "epoch", y_axis, x_log, (0, max_epoch - 1))
         plt.show()
 
-    def _2D_graph_settings(self, plt, x_label, y_label, x_log, xlims):
-
-        plt.xlabel(self.xlabels[x_label])
-        plt.ylabel(self.training_ylabels[y_label])
-        plt.legend(loc='best')
-        plt.xlim(*xlims)
-
-        if x_log:
-            plt.xscale('log')
-
-        plt.tight_layout()
-
     def _results_graph(self, x_axis, y_axis, x_log, classes=[], **vals):
         ''' Produce a graph of a hyperparameter against a measure of performance.
 
@@ -473,7 +584,6 @@ class HyperSearch(object):
 
         plt.show()
 
-
     def _results_graph3D(self, x_axis, y_axis, x_log, y_log, z_axis='accuracy', **vals):
         '''
         '''
@@ -537,6 +647,23 @@ class HyperSearch(object):
             ax.yaxis.set_scale('log')
 
         plt.show()
+
+    def _2D_graph_settings(self, plt, x_label, y_label, x_log, xlims):
+
+        plt.xlabel(self.xlabels[x_label])
+
+        if x_label == 'epoch':
+            plt.ylabel(self.training_ylabels[y_label])
+        else:
+            plt.ylabel(self.results_ylabels[y_label])
+
+        plt.legend(loc='best')
+        plt.xlim(*xlims)
+
+        if x_log:
+            plt.xscale('log')
+
+        plt.tight_layout()
 
     def _add_bench(self, plt, y_axis, classes):
 

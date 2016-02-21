@@ -7,9 +7,9 @@ The unified interface to multilayer perceptron implementations in Python.
 
 Quick-start:
 
-* Instantiate a class instance with an associated dataset ``X, Y``.
-* Run :mod:`set_iter_hypers` and :mod:`set_nn_hypers` to specify non-default hyperparameters of the neural network.
-* Run :mod:`run_test` to perform a fitting. Returns a dict with fitting history and performance measures.
+* Instantiate a :class:`~unifiedmlp.UnifiedMLP` instance with an associated dataset ``X, Y``.
+* Run :func:`~unifiedmlp.UnifiedMLP.set_hypers` to specify non-default hyperparameters of the neural network.
+* Run :func:`~unifiedmlp.UnifiedMLP.run_test` to perform a fitting. Returns a dict with fitting history and performance measures.
 
 Please also check the :doc:`hyperparameters reference guide<../hyperparameter_reference>`.
 
@@ -25,7 +25,7 @@ Class reference
 Results dict reference
 ----------------------
 
-The keys of the dict are shown below with brief explanations. Nested dicts represented as nested bullet points.
+The keys of the dict are shown below with brief explanations. Nested dicts represented as nested bullet points. Quantities end in _all when they are not per-class.
 
 * **hypers**: Complete dict of the hyperparameters under which the model was built, trained and tested.
 
@@ -45,3 +45,4 @@ The keys of the dict are shown below with brief explanations. Nested dicts repre
   * **time_all**: *Float.* Average training time in seconds for one epoch.
   * **accuracy_all**: *Float.* Accuracy on test dataset.
   * **F1_all**: *Float.* F1 score on validation dataset.
+  * **n_epochs_all**: *Int.* Epochs taken to reach training convergence.

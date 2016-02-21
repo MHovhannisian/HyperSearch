@@ -34,6 +34,10 @@ class UnifiedMLP(object):
     Then, neural networks from multiple packages with specified hyperparameters
     can be trained to this dataset and the results compared.
 
+    After initialisation, a dict self.benchmark in the results dict format is
+    accessible. The stratified random approach of randomly assigning outcomes
+    with correct class weights is used. :ref:`results-dict`.
+
     Parameters
     ----------
 
@@ -42,15 +46,28 @@ class UnifiedMLP(object):
         each with n_features elements.
 
     Y : array-like, shape (n_samples, n_classes)
-        Vectors of labelled outcomes for each sample. UnifiedMLP currently
-        expects a boolean or binary array specifying membership to each of
-        n_classes classes.
+        Vectors of labelled outcomes for each sample. UnifiedMLP expects a
+        boolean or binary array specifying membership to each of n_classes
+        classes.
 
     split : tuple of 3 entries, summing to 1.0 or less.
         The split of data between training, validation and testing. Training
         data is passed to fit() methods, validation data is used to track
         fitting progress and can be used for early stopping, and test data is
         used for the final evaluation of model quality.
+
+    Examples
+    --------
+
+    >>> nn = UnifiedMLP(X, Ys).set_hypers(
+    ...     learning_rate=0.001,
+    ...     batch_size=24,
+    ...     module='keras',
+    ...     dropout=0.5,
+    ...     max_epoch=50,
+    ... )
+    >>> results, model = nn.run_test()
+
     """
 
     _default_hypers = {
@@ -77,7 +94,7 @@ class UnifiedMLP(object):
 
         # SGD only
         'momentum': 0.9,
-        'nesterovs_momentum': False,
+        'nesterov': False,
 
         # Adam only (Scikit-learn and Keras only)
         'beta_1': 0.9,
@@ -88,7 +105,7 @@ class UnifiedMLP(object):
         #  Iteration/epoch settings - can be changed  #
         ###############################################
         # Epochs to run for if no convergence.
-        'max_epoch': 3,
+        'max_epoch': 100,
 
         # Max decline in loss between epochs to consider converged. (Ratio)
         'epoch_tol': 0.001,
@@ -234,7 +251,8 @@ class UnifiedMLP(object):
     def set_hypers(self, **new_settings):
         ''' Set the hyperparameters with which neural networks are built.
 
-        Takes keyword arguments.
+        Takes keyword arguments setting neural network hyperparameters.
+        :doc:`Hyperparameters reference guide<../hyperparameter_reference>`.
 
         Returns
         -------
@@ -270,6 +288,9 @@ class UnifiedMLP(object):
 
         results : dict
             Stores results of the test. :ref:`results-dict`.
+        model : object
+            The MLP object resulting from running the test, with a class
+            dependent on the module which was used.
         """
 
         module = self.get_hypers()['module']
@@ -353,7 +374,7 @@ class UnifiedMLP(object):
                 lr=self._nn_hypers['learning_rate'],
                 decay=0.0,
                 momentum=self._nn_hypers['momentum'],
-                nesterov=self._nn_hypers['nesterovs_momentum'],
+                nesterov=self._nn_hypers['nesterov'],
             )
             callbacks = [LearningRateScheduler(learning_schedule)]
         elif self._nn_hypers['algorithm'] == 'adam':
@@ -470,8 +491,7 @@ class UnifiedMLP(object):
 
         valid_keys = [
             'activation', 'alpha', 'batch_size', 'random_state', 'shuffle',
-            'verbose', 'momentum', 'nesterovs_momentum', 'beta_1',
-            'beta_2', 'epsilon', 'algorithm'
+            'verbose', 'momentum', 'beta_1', 'beta_2', 'epsilon', 'algorithm'
         ]
 
         sklearn_settings = {key: val for key, val in self._nn_hypers.items()
@@ -481,6 +501,7 @@ class UnifiedMLP(object):
             'n_labels': self.n_labels_sklearn,
             'hidden_layer_sizes': (self._nn_hypers['hidden_units']),
             'learning_rate_init': self._nn_hypers['learning_rate'],
+            'nesterovs_momentum': self._nn_hypers['nesterov'],
             'learning_rate': 'constant',
             'max_iter': 1,
             'warm_start': True
@@ -581,7 +602,7 @@ class UnifiedMLP(object):
             learning_rate = self._nn_hypers['learning_rate']
             if self._nn_hypers['momentum'] == 0.0:
                 learning_rule = 'sgd'
-            elif self._nn_hypers['nesterovs_momentum'] is True:
+            elif self._nn_hypers['nesterov'] is True:
                 learning_rule = 'nesterov'
             else:
                 learning_rule = 'momentum'
@@ -591,6 +612,10 @@ class UnifiedMLP(object):
         else:
             err = "The algorithm " + self._nn_hypers['algorithm'] +\
                 " is not supported."
+            raise KeyError(err)
+
+        if self._nn_hypers['dropout'] != 0 and self._nn_hypers['alpha'] != 0:
+            err = "The combined use of dropout and alpha is not supported."
             raise KeyError(err)
 
         if self._nn_hypers['learning_decay'] != 0.0:
