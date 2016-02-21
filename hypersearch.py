@@ -220,7 +220,7 @@ class HyperSearch(object):
         Parameters
         ----------
 
-        ignore_failure: bool
+        ignore_failure : bool
             Continue past tests which fail due to incompatible settings. If
             True, missing data will be automatically excluded from graphs
             and made clear in csv outputs. Errors raised will be printed for
@@ -338,13 +338,71 @@ class HyperSearch(object):
               x_log=False, y_log=False, classes=None, **vals):
         ''' Visualise a slice of the data through a graph.
 
+        If the slice to take is underspecified, unconstrained hyperparameters
+        are set to their value in the neural network with maximum accuracy.
+
+        Parameters
+        ----------
+
+        x_axis : str, 'epoch' or any hyperparameter from the search.
+            If 'epoch', show how MLP performance changed during training.
+            If a hyperparameter, show MLP performance between models varying
+            by the given hyperparameter.
+
+        y_axis : str.
+            If **x_axis** = 'epoch', y_axis is an array of per-epoch data,
+            one of:
+
+                * *accuracy* or *F1* - performance on the validation set;
+                * *loss* - loss function on the training data;
+                * *time* - epoch's wallclock training time (seconds).
+
+            If **x_axis** = hyperparameter, y_axis is a scalar, one of:
+
+                * *accuracy* or *F1* - performance on the test set;
+                * *time* - average training time per epoch
+                * *n_epochs* - number of epochs taken to reach convergence.
+
+        z_axis : str, {accuracy, F1, time, n_epochs}
+            If **y_axis** and **x_axis** are both hyperparameters, a performance
+            metric can be specified on the z_axis to create a 3D plot. In this
+            case, options to plot multiple lines are not supported.
+
+        x_log : bool
+            Use logarithmic scale on the x-axis.
+
+        y_log : bool
+            For 3D graphs only. Use logarithmic scale on the y-axis.
+
+        classes : None or str or list of str or '*'
+            If not None, plot separate lines for each given class, according to
+            class names given at initialisation. Applies to **y_axis** = F1 or
+            accuracy.
+
+            '*' specifies all classes.
+
+        vals : Key-value pairs. Values can also be a list or '*'.
+            Constrain the slice of the dataset to take by fixing hyperparameters
+            e.g. `dropout=0.4`. Provide a list or '*' to prouce a seperate line
+            for each of multiple or all hyperparameter values.
+
         Examples
         --------
 
+        Results graph (x_axis set to a hyperparameter)
+
+        >>> hs.graph(y_axis="n_epochs", x_axis="batch_size")
+        UserWarning: Unspecified parameters were automatically fixed:
+            dropout: 0.4
         >>> hs.graph(y_axis="accuracy", x_axis="dropout", batch_size='*')
+
+        Training graph (x_axis set to "epoch")
+
         >>> hs.graph(y_axis="time", x_axis="epoch", module='sklearn', dropout=0.0, hidden_units='*')
         >>> hs.graph(y_axis="F1", x_axis="epoch", classes=['brown_hair', 'over35', 'city_dweller'])
-        >>> hs.graph(y_axis="n_epochs", x_axis="batch_size")
+
+        3D results graph (x_axis and y_axis set to hyperparameters)
+
         >>> hs.graph(y_axis="dropout", x_axis="batch_size")
 
         '''
@@ -455,7 +513,7 @@ class HyperSearch(object):
                         y = [[result['training'][y_axis][i_epoch][self.cls.index(c)]
                               for i_epoch in range(n_epochs)]
                              for c in classes]
-                    except KeyError:  # No per-class data for "time"
+                    except KeyError:  # No per-class data for "time" or "loss"
                         err = 'No per-class data for y-axis = ' + str(y_axis)
                         raise KeyError(err)
 

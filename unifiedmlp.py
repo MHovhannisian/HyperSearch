@@ -173,8 +173,9 @@ class UnifiedMLP(object):
             'accuracy': accuracy,
             'F1_all': F1_all,
             'accuracy_all': accuracy_all,
-            'time_all': 0.0,
-            'n_epochs_all': 0
+            'time_all': 0,
+            'n_epochs_all': 0,
+            'loss_all' : 0
         }
 
     @staticmethod
