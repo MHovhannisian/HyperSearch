@@ -128,7 +128,7 @@ The defaults are usually good options.
 Stopping criteria
 """""""""""""""""
 
-Controlled uniformly by :mod:`unifiedmlp`, rather than the individual modules.
+Controlled uniformly by :mod:`unifiedmlp` itself, rather than the individual modules.
 
 +----------------+---------------------------------+----------------+-------+----------------------------+
 | Hyperparameter | Description                     | Allowed values | N L K | Value description          |

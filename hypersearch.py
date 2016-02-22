@@ -98,6 +98,7 @@ class HyperSearch(object):
                                 'time': 'Training time per epoch (seconds)',
                                 'n_epochs': 'Training epochs before stopping'
                                 }
+        self.perclass_ylabels = ['F1', 'accuracy']
         self.training_ylabels = {'F1': 'F1 score (validation data)',
                                  'accuracy': 'Accuracy score (validation data)',
                                  'time': 'Training time for epoch (seconds)',
@@ -949,29 +950,102 @@ class HyperSearch(object):
                     print ("| " + header2),
                 print
 
-                # accuracy line
-                print fmt_prefix[:-2].format("accuracy"),
-                for i_cls in i_cls_gen:
-                    model = self.results[coord_sets[0]]['performance']['accuracy'][- i_cls]
-                    bench = self.MLP.benchmark['accuracy'][- i_cls]
-                    print "| {0:5.3f} | {1:5.3f}".format(bench, model),
-                print
-
-                # F1 line
-                print fmt_prefix[:-2].format("F1"),
-                for i_cls in i_cls_gen:
-                    model = self.results[coord_sets[0]]['performance']['F1'][- i_cls]
-                    bench = self.MLP.benchmark['F1'][- i_cls]
-                    print "| {0:5.3f} | {1:5.3f}".format(bench, model),
-                print
+                # per-class performance measures
+                for perf in self.perclass_ylabels:
+                    print fmt_prefix[:-2].format(perf),
+                    for i_cls in i_cls_gen:
+                        model = self.results[coord_sets[0]]['performance'][perf][- i_cls]
+                        bench = self.MLP.benchmark[perf][- i_cls]
+                        print "| {0:5.3f} | {1:5.3f}".format(bench, model),
+                    print
 
                 remaining_cls -= cls_this_line
                 print
 
-    def csv_out(self):
-        ''' Output results data as a CSV file for external use. '''
+    def csv_out(self, file_name="auto.csv"):
+        ''' Output results data as a CSV file for external use.
+
+        The first row provides column labels. Columns are logically grouped as:
+
+        [hyperparameters] [performance] [per-class performance] [training curves]\
+        [per-class training curves]
+
+        The second row describes the benchmark classifier. All inapplicable
+        fields are set to zero.
+
+        For the series data in the result['training'] dict, the entire series
+        is held in a quoted string.
+        '''
+
+        hypers = self._dim_names
+
+        results_labels = [key + "_all" for key in self.results_ylabels.keys()]
+        training_labels = [key + "_all" for key in self.training_ylabels.keys()]
+
+        training_cls_labels = results_cls_labels = self.perclass_ylabels
+
+        # Strings for naming columns
+        cls_results_labels = [key + "_" + cls for key in self.perclass_ylabels
+                                            for cls in self.cls]
+        cls_training_labels = [key + "_" + cls for key in self.perclass_ylabels
+                                            for cls in self.cls]
+
+        coord_gen = itertools.product(*self._dim_idxs)
+        val_gen = itertools.product(*self._dim_vals)
+
+        with open(file_name, 'wb') as csvfile:
+            fp = csv.writer(csvfile, delimiter=' ',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+            # Write header line
+            fp.writerow(hypers + results_labels + cls_results_labels +
+                        training_labels + cls_training_labels)
+
+            # Write benchmark line
+            vals = [0 for i in range(self._n_dims)]
+            performance = [self.MLP.benchmark[label] for label in results_labels]
+            class_performance = [self.MLP.benchmark[label][i_cls]
+                                    for label in results_cls_labels
+                                        for i_cls in range(len(self.cls))]
+            training = [0 for label in training_labels]
+            class_training = [0 for label in training_cls_labels
+                                    for _ in self.cls]
+
+            fp.writerow(list(vals) + performance + class_performance +
+                        training + class_training)
+
+            # Write lines
+            for coords, vals in zip(coord_gen, val_gen):
+                result = self.results[coords]
+                n_epochs = result['performance']['n_epochs_all']
+
+                performance = [result['performance'][label]
+                                        for label in results_labels]
+                class_performance = [result['performance'][label][i_cls]
+                                        for label in results_cls_labels
+                                            for i_cls in range(len(self.cls))]
+                training = [joinstr(" ", result['training'][label])
+                                        for label in training_labels]
+                class_training = [joinstr(" ", [result['training'][label][j_epoch][i_cls]
+                                        for j_epoch in range(n_epochs)])
+                                            for label in training_cls_labels
+                                                for i_cls in range(len(self.cls))]
+
+                fp.writerow(list(vals) + performance + class_performance +
+                            training + class_training)
+
+
+
+
+
 
         return None
+
+def joinstr(string, iterable):
+    ''' Like the str method join(), but works when the items are not str. '''
+
+    return string.join([str(item) for item in iterable])
+
 
 def ar_idx(arr, value):
     ''' Implement  list([e1, e2, ...]).index(element) for numpy arrays '''
