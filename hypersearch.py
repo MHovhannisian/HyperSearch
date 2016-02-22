@@ -311,30 +311,6 @@ class HyperSearch(object):
 
         return instance
 
-    def _autoset_vals(self, axes, vals, coords, verbose=False):
-        ''' Provide warning that a loose parameter was automatically fixed '''
-
-        manually_set = axes + vals.keys()
-
-        auto_set_dim_names = [dim_name for dim_name in self._dim_names
-                              if dim_name not in manually_set]
-        auto_set_dims = [self._dim_names.index(dim_name) for dim_name in
-                         auto_set_dim_names]
-        auto_set_dim_vals = [self._dim_vals[dim][coords[dim]] for dim in
-                             auto_set_dims]
-
-        if auto_set_dim_vals:
-            warnstr = "Unspecified parameters were automatically fixed:\n"
-
-            for name, value in zip(auto_set_dim_names, auto_set_dim_vals):
-                warnstr += "\t" + name + ": " + str(value) + "\n"
-                vals.update({name: [value]})
-
-            if verbose:
-                warnings.warn(warnstr)
-
-        return vals
-
     def graph(self, x_axis='epoch', y_axis='accuracy', z_axis='accuracy',
               x_log=False, y_log=False, classes=None, **vals):
         ''' Visualise a slice of the data through a graph.
@@ -707,6 +683,30 @@ class HyperSearch(object):
 
         plt.show()
 
+    def _autoset_vals(self, axes, vals, coords, verbose=False):
+        ''' Provide warning that a loose parameter was automatically fixed '''
+
+        manually_set = axes + vals.keys()
+
+        auto_set_dim_names = [dim_name for dim_name in self._dim_names
+                              if dim_name not in manually_set]
+        auto_set_dims = [self._dim_names.index(dim_name) for dim_name in
+                         auto_set_dim_names]
+        auto_set_dim_vals = [self._dim_vals[dim][coords[dim]] for dim in
+                             auto_set_dims]
+
+        if auto_set_dim_vals:
+            warnstr = "Unspecified parameters were automatically fixed:\n"
+
+            for name, value in zip(auto_set_dim_names, auto_set_dim_vals):
+                warnstr += "\t" + name + ": " + str(value) + "\n"
+                vals.update({name: [value]})
+
+            if verbose:
+                warnings.warn(warnstr)
+
+        return vals
+
     def _2D_graph_settings(self, plt, x_label, y_label, x_log, xlims):
 
         plt.xlabel(self.xlabels[x_label])
@@ -817,8 +817,15 @@ class HyperSearch(object):
                               if key not in search_hypers}
         return static_hyperparams
 
-    def summary(self, class_split=False):
-        ''' Summarise the HyperSearch instance. '''
+    def summary(self, classes=False):
+        ''' Summarise the HyperSearch instance.
+
+        Parameters
+        ----------
+
+        classes : bool
+            Print extra information stratifying performance by class.
+        '''
 
         print
         print "HyperSearch summary"
@@ -826,17 +833,17 @@ class HyperSearch(object):
         print
 
         dim_len = max_print_len(self._dim_names, 14)
-        fmt_prefix = "{0:" + dim_len + "} | "
+        fmt_prefix = "{:" + dim_len + "} | "
 
         if not self.search:
             print "Fresh HyperSearch instance. No search parameters given yet."
         else:
             print "Configured hyperparameter search:"
 
-            print (fmt_prefix + "{1:>3} | Range").format("Hyperparameter", "N",
+            print (fmt_prefix + "{:>3} | Range").format("Hyperparameter", "N",
                                                          "High val", "Low val")
             for name, values, in zip(self._dim_names, self._dim_vals):
-                line = (fmt_prefix + "{1:>3} | ").format(name, len(values))
+                line = (fmt_prefix + "{:>3} | ").format(name, len(values))
                 try:
                     values[0] - 1.0  # Fail if categorical data.
                     line += "{:.3} to {:.3}".format(values[0], values[-1])
@@ -854,14 +861,14 @@ class HyperSearch(object):
             print
 
             if self.ran.all():
-                self._show_perf_summary(fmt_prefix, class_split=class_split)
+                self._show_perf_summary(fmt_prefix, classes=classes)
 
             else:
                 print "The hyperparameter search is incomplete."
 
         return self
 
-    def _show_perf_summary(self, fmt_prefix, class_split=False, n=3):
+    def _show_perf_summary(self, fmt_prefix, classes=False, n=3):
 
         try:
             assert(np.prod(self._dims) >= n)
@@ -869,16 +876,20 @@ class HyperSearch(object):
             warnings.warn("Lowering n to number of available models.")
             n = np.prod(self._dims) >= n
 
+        print "Model performance"
+        print "-----------------"
+        print 
+
         # Hyperparameters of top models
         print "Top models:"
         coord_sets = n_argmax(self.accuracy_all, n=n)
-        print (fmt_prefix + "{1:9}").format("Hyperparameter", "Benchmark"),
+        print (fmt_prefix + "{:9}").format("Hyperparameter", "Benchmark"),
         for i in range(n):
             print "| {:7}".format("Model " + str(i + 1)),
         print
 
         for i, (name, values) in enumerate(zip(self._dim_names, self._dim_vals)):
-            print (fmt_prefix + "{1:>9}").format(name, "-"),
+            print (fmt_prefix + "{:>9}").format(name, "-"),
             try:  # Fail if categorical data.
                 for j in range(n):
                     print "| {:>7.3g}".format(values[coord_sets[j][i]]),
@@ -890,7 +901,7 @@ class HyperSearch(object):
 
         # Performance measures of top models
         print
-        print (fmt_prefix + "{1:9}").format("Performance", "Benchmark"),
+        print (fmt_prefix + "{:9}").format("Performance", "Benchmark"),
         for i in range(n):
             print "| {:7}".format("Model " + str(i + 1)),
         print
@@ -898,16 +909,72 @@ class HyperSearch(object):
         specifiers = ['.3f'] * 3 + ['d']
 
         for perf, spec in zip(self.results_ylabels.keys(), specifiers):
-            print (fmt_prefix + "{1:9" + spec + "}").\
+            print (fmt_prefix + "{:9" + spec + "}").\
                 format(perf, self.MLP.benchmark[perf + '_all']),
             for j in range(n):
                 perf_vals = self.results[coord_sets[j]]['performance']
                 print ("| {0:7" + spec + "}").format(perf_vals[perf + "_all"]),
             print
 
+        if classes:
+            print
+            print "Per-class performance of top model"
+            print "----------------------------------"
+            print
+
+            # Calculate number of classes to put on one line.
+            header2 = "Bench | Model"
+            max_chars = 79
+            class_len = len(header2)
+            prefix_len = len((fmt_prefix[:-2]).format(""))
+            cls_line = int(float(max_chars - prefix_len)/class_len)
+
+            remaining_cls = self.n_classes
+
+            while remaining_cls:
+
+                cls_this_line = min(cls_line, remaining_cls)
+                i_cls_gen = (range(remaining_cls, remaining_cls - cls_this_line, -1))
+
+                # Table header 1
+                print fmt_prefix[:-2].format(""),
+                for i_cls in i_cls_gen:
+                    cls = self.cls[-i_cls][:class_len]
+                    print ("| {:" + str(class_len) + "}").format(cls),
+                print
+
+                # Table header 2
+                print fmt_prefix[:-2].format("Performance"),
+                for _ in i_cls_gen:
+                    print ("| " + header2),
+                print
+
+                # accuracy line
+                print fmt_prefix[:-2].format("accuracy"),
+                for i_cls in i_cls_gen:
+                    model = self.results[coord_sets[0]]['performance']['accuracy'][- i_cls]
+                    bench = self.MLP.benchmark['accuracy'][- i_cls]
+                    print "| {0:5.3f} | {1:5.3f}".format(bench, model),
+                print
+
+                # F1 line
+                print fmt_prefix[:-2].format("F1"),
+                for i_cls in i_cls_gen:
+                    model = self.results[coord_sets[0]]['performance']['F1'][- i_cls]
+                    bench = self.MLP.benchmark['F1'][- i_cls]
+                    print "| {0:5.3f} | {1:5.3f}".format(bench, model),
+                print
+
+                remaining_cls -= cls_this_line
+                print
+
+    def csv_out(self):
+        ''' Output results data as a CSV file for external use. '''
+
+        return None
 
 def ar_idx(arr, value):
-    ''' Implement  list([e1, e2, ...]).index(element) for numpy arrays. '''
+    ''' Implement  list([e1, e2, ...]).index(element) for numpy arrays '''
 
     try:  # Necessary for float
         idx = np.isclose(arr, value).nonzero()[0][0]

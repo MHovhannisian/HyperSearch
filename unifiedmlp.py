@@ -76,14 +76,14 @@ class UnifiedMLP(object):
         ##################
         #  Architecture  #
         ##################
-        'hidden_units': 15,  # !!
+        'hidden_units': 15,
         'activation': 'relu',
 
         ####################
         #  Regularisation  #
         ####################
         'alpha': 0.0000,  # L2 penalty. 0.0 = turned off.
-        'dropout': 0.0,  # !! Dropout between hidden and output layers.
+        'dropout': 0.0,  # Dropout between hidden and output layers.
 
         ##############
         #  Learning  #
@@ -616,7 +616,7 @@ class UnifiedMLP(object):
             raise KeyError(err)
 
         if self._nn_hypers['dropout'] != 0 and self._nn_hypers['alpha'] != 0:
-            err = "The combined use of dropout and alpha is not supported."
+            err = "The combined use of dropout and L2 is not supported."
             raise KeyError(err)
 
         if self._nn_hypers['learning_decay'] != 0.0:
