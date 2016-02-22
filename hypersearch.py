@@ -7,6 +7,7 @@ import itertools
 import warnings
 import collections
 import sys
+import csv
 
 # User-contributed modules
 import numpy as np
@@ -774,8 +775,12 @@ class HyperSearch(object):
         ''' Produce label differentiating lines in a 2D graph. '''
         ranged_vals = [key for key, val in vals.items() if len(val) > 1]
 
-        n_lines = reduce(lambda x, y: x * y,
-                         [len(val) for val in vals.values()])
+        try:
+            n_lines = reduce(lambda x, y: x * y,
+                             [len(val) for val in vals.values()])
+        except TypeError:
+            n_lines = 1
+
         if classes:
             n_lines *= len(classes)
 
@@ -902,6 +907,7 @@ class HyperSearch(object):
 
 
 def ar_idx(arr, value):
+    ''' Implement  list([e1, e2, ...]).index(element) for numpy arrays. '''
 
     try:  # Necessary for float
         idx = np.isclose(arr, value).nonzero()[0][0]
@@ -912,6 +918,7 @@ def ar_idx(arr, value):
 
 
 def max_print_len(elems, min_len=0):
+    ''' Return maximum length of elements in list represented as str '''
 
     max_len = min_len
 
