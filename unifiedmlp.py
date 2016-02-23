@@ -577,6 +577,8 @@ class UnifiedMLP(object):
             getScores(self.Y_test, test_predict)
         n_epochs = i_epoch + 1
 
+        loss_curve = [loss / self.n_classes for loss in loss_curve]
+
         training = (loss_curve, accuracy_curve, F1_curve,
                     time_curve, accuracy_all_curve, F1_all_curve)
         performance = (test_accuracy, test_F1, np.mean(
@@ -683,7 +685,9 @@ class UnifiedMLP(object):
 
             end_time = timeit.default_timer()
             time_curve.append(end_time - start_time)
-            loss_curve.append(batch_loss[0])
+
+            # Normalise the same as the other loss curves.
+            loss_curve.append(batch_loss[0] / (4 * self.n_classes))
 
             # NOTE: predict_proba returns 2 entries per binary class, which are
             # True and False, adding to 1.0. We take the probability of True.
