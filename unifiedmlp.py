@@ -401,7 +401,7 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        accuracy_curve, accuracy_all_curve = [], []
+        acc_curve, acc_all_curve = [], []
         F1_curve, F1_all_curve = [], []
         time_curve = []
 
@@ -439,9 +439,9 @@ class UnifiedMLP(object):
             valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
                 getScores(self.Y_valid, valid_predict)
 
-            accuracy_curve.append(valid_accuracy)
+            acc_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
-            accuracy_all_curve.append(valid_accuracy_all)
+            acc_all_curve.append(valid_accuracy_all)
             F1_all_curve.append(valid_F1_all)
 
             #############################
@@ -453,20 +453,20 @@ class UnifiedMLP(object):
                 break
 
             if self._nn_hypers['early_stopping'] and\
-                    self._converged(accuracy_all_curve, n_valid):
+                    self._converged(acc_all_curve, n_valid, invert=True):
                 stop_reason = 2
                 break
 
         test_proba = keras_nn.predict_proba(self.X_test, verbose=0)
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+        test_acc, test_F1, test_acc_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
         n_epochs = i_epoch + 1
 
-        training = (loss_curve, accuracy_curve, F1_curve,
-                    time_curve, accuracy_all_curve, F1_all_curve)
-        performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all, n_epochs)
+        training = (loss_curve, acc_curve, F1_curve,
+                    time_curve, acc_all_curve, F1_all_curve)
+        performance = (test_acc, test_F1, np.mean(
+            time_curve), test_acc_all, test_F1_all, n_epochs)
 
         return training, performance, keras_nn
 
@@ -519,7 +519,7 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        accuracy_curve, accuracy_all_curve = [], []
+        acc_curve, acc_all_curve = [], []
         F1_curve, F1_all_curve = [], []
         time_curve = []
 
@@ -553,9 +553,9 @@ class UnifiedMLP(object):
             valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
                 getScores(self.Y_valid, valid_predict)
 
-            accuracy_curve.append(valid_accuracy)
+            acc_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
-            accuracy_all_curve.append(valid_accuracy_all)
+            acc_all_curve.append(valid_accuracy_all)
             F1_all_curve.append(valid_F1_all)
 
             #############################
@@ -567,22 +567,22 @@ class UnifiedMLP(object):
                 break
 
             if self._nn_hypers['early_stopping'] and\
-                    self._converged(accuracy_all_curve, n_valid):
+                    self._converged(acc_all_curve, n_valid, invert=True):
                 stop_reason = 2
                 break
 
         test_proba = sklearn_nn.predict_proba(self.X_test)
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+        test_acc, test_F1, test_acc_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
         n_epochs = i_epoch + 1
 
         loss_curve = [loss / self.n_classes for loss in loss_curve]
 
-        training = (loss_curve, accuracy_curve, F1_curve,
-                    time_curve, accuracy_all_curve, F1_all_curve)
-        performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all, n_epochs)
+        training = (loss_curve, acc_curve, F1_curve,
+                    time_curve, acc_all_curve, F1_all_curve)
+        performance = (test_acc, test_F1, np.mean(
+            time_curve), test_acc_all, test_F1_all, n_epochs)
 
         return training, performance, sklearn_nn
 
@@ -667,7 +667,7 @@ class UnifiedMLP(object):
         ##############
 
         loss_curve = []
-        accuracy_curve, accuracy_all_curve = [], []
+        acc_curve, acc_all_curve = [], []
         F1_curve, F1_all_curve = [], []
         time_curve = []
 
@@ -696,9 +696,9 @@ class UnifiedMLP(object):
             valid_accuracy, valid_F1, valid_accuracy_all, valid_F1_all =\
                 getScores(self.Y_valid, valid_predict)
 
-            accuracy_curve.append(valid_accuracy)
+            acc_curve.append(valid_accuracy)
             F1_curve.append(valid_F1)
-            accuracy_all_curve.append(valid_accuracy_all)
+            acc_all_curve.append(valid_accuracy_all)
             F1_all_curve.append(valid_F1_all)
 
             # Use change in loss_curve to evaluate stability
@@ -707,20 +707,20 @@ class UnifiedMLP(object):
                 break
 
             if self._nn_hypers['early_stopping'] and\
-                    self._converged(accuracy_all_curve, n_valid):
+                    self._converged(acc_all_curve, n_valid, invert=True):
                 stop_reason = 2
                 break
 
         test_proba = sknn_nn.predict_proba(self.X_test)[:, 1::2]
         test_predict = self._predict_from_proba(test_proba)
-        test_accuracy, test_F1, test_accuracy_all, test_F1_all =\
+        test_acc, test_F1, test_acc_all, test_F1_all =\
             getScores(self.Y_test, test_predict)
         n_epochs = i_epoch + 1
 
-        training = (loss_curve, accuracy_curve, F1_curve,
-                    time_curve, accuracy_all_curve, F1_all_curve)
-        performance = (test_accuracy, test_F1, np.mean(
-            time_curve), test_accuracy_all, test_F1_all, n_epochs)
+        training = (loss_curve, acc_curve, F1_curve,
+                    time_curve, acc_all_curve, F1_all_curve)
+        performance = (test_acc, test_F1, np.mean(
+            time_curve), test_acc_all, test_F1_all, n_epochs)
 
         return training, performance, sknn_nn
 
@@ -732,13 +732,23 @@ class UnifiedMLP(object):
 
         return X[:n_trimmed_samples], Y[:n_trimmed_samples]
 
-    def _converged(self, objective, n_objective):
-        ''' Inputs:
+    def _converged(self, objective, n_objective, invert=False):
+        ''' Check if a quantity in a list has stopped decreasing within tol
 
-            objective: Loss or validation score at end of each epoch until now
-            n_objective: Length of previous stability streak
+            Parameters
+            ----------
 
-            Returns:
+            objective : list
+                Loss or validation score at end of each epoch until now
+
+            n_objective : list of int
+                Length of previous stability streak
+
+            invert : bool
+                Check if quantity has stopped increasing instead of decreasing
+
+            Returns
+            -------
 
             True if converged according to settings
             False if not converged according to settings
@@ -747,11 +757,13 @@ class UnifiedMLP(object):
         '''
 
         try:
-            objective_ratio = math.fabs(1 - (objective[-1] / objective[-2]))
+            change = (objective[-1] / objective[-2]) - 1.0
         except IndexError:
             return False
 
-        if objective_ratio < self._nn_hypers['epoch_tol']:
+        change = change if invert else change * -1.0
+
+        if change < self._nn_hypers['epoch_tol']:
             n_objective[0] += 1
         else:
             n_objective[0] = 0
