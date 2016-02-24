@@ -288,7 +288,9 @@ class UnifiedMLP(object):
         -------
 
         results : dict
-            Stores results of the test. :ref:`results-dict`.
+            Results of the test. :ref:`results-dict`.
+        hypers : dict
+            Complete dict of hyperparameters used.
         model : object
             The MLP object resulting from running the test, with a class
             dependent on the module which was used.
@@ -303,23 +305,27 @@ class UnifiedMLP(object):
         }
 
         training, performance, model = modules[module]()
-        results = {'hypers': self.get_hypers()}
-        results['training'] = {'loss_all': training[0],
-                               'accuracy': training[1],
-                               'F1': training[2],
-                               'time_all': training[3],
-                               'accuracy_all': training[4],
-                               'F1_all': training[5]
+        hypers = self.get_hypers()
+        results = {
+            'training': {
+                'loss_all': training[0],
+                'accuracy': training[1],
+                'F1': training[2],
+                'time_all': training[3],
+                'accuracy_all': training[4],
+                'F1_all': training[5]
+            },
+            'performance': {
+                'accuracy': performance[0],
+                'F1': performance[1],
+                'time_all': performance[2],
+                'accuracy_all': performance[3],
+                'F1_all': performance[4],
+                'n_epochs_all': performance[5]
+             }
         }
-        results['performance'] = {'accuracy': performance[0],
-                                  'F1': performance[1],
-                                  'time_all': performance[2],
-                                  'accuracy_all': performance[3],
-                                  'F1_all': performance[4],
-                                  'n_epochs_all': performance[5]
-                                 }
 
-        return results, model
+        return results, hypers, model
 
     def _keras(self):
 

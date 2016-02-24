@@ -264,7 +264,7 @@ class HyperSearch(object):
             module = self.MLP.get_hypers()['module']
 
             try:
-                result, _ = self.MLP.run_test()
+                result, hypers, _ = self.MLP.run_test()
                 self.success[coordinates] = True
 
                 self.results[coordinates] = result
@@ -292,6 +292,10 @@ class HyperSearch(object):
 
         self._show_errs(errs)
         self.errs.update(errs)
+
+        # Keep one record of the hyperparamters. We know which ones were
+        # changed between runs.
+        self.hypers = hypers
 
         return self
 
@@ -470,6 +474,7 @@ class HyperSearch(object):
         # Set up multi-line plotting
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
         labels = self._line_setup(vals, line_val_groups, classes)
+        colors = self._get_palette(vals, classes)
 
         ########################
         #  Main plotting loop  #
@@ -499,16 +504,18 @@ class HyperSearch(object):
                     for i_c, c in enumerate(classes):
                         plt.plot(y[i_c],
                                  label="Class: {}; ".format(c) + label,
+                                 color=colors.next()
                                  )
 
                 else:
                     y = result['training'][y_axis + "_all"]
-                    plt.plot(y, label=labels.next())
+                    plt.plot(y, label=labels.next(), color=colors.next())
 
             else:
                 print 'No data for "' + labels.next() + '"'
+                colors.next()
 
-        self._add_bench(plt, y_axis, classes)
+        self._add_bench(plt, y_axis, classes, colors)
         self._2D_graph_settings(plt, "epoch", y_axis, x_log, (0, max_epoch - 1))
         plt.show()
 
@@ -566,6 +573,7 @@ class HyperSearch(object):
         # Set up a line for all combinations in vals
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
         labels = self._line_setup(vals, line_val_groups, classes)
+        colors = self._get_palette(vals, classes)
 
         # Plotting loop
         for line_idxs in line_idx_groups:
@@ -605,16 +613,18 @@ class HyperSearch(object):
                     plt.plot(x, y[i_c],
                              marker=marker,
                              linestyle=ls,
-                             label="Class: {}; ".format(c) + label)
+                             label="Class: {}; ".format(c) + label,
+                             color=colors.next())
 
             # Plot one line -- overall results.
             elif not classes and y:
                 plt.plot(x, y, marker=marker,
-                         linestyle=ls, label=labels.next())
+                         linestyle=ls, label=labels.next(), color=colors.next())
             else:
                 print 'No data for "' + labels.next() + '"'
+                colors.next()
 
-        self._add_bench(plt, y_axis, classes)
+        self._add_bench(plt, y_axis, classes, colors)
         xlims = (x_master[0] - border, x_master[-1] + border)
         self._2D_graph_settings(plt, x_axis, y_axis, x_log, xlims)
 
@@ -717,15 +727,15 @@ class HyperSearch(object):
         else:
             plt.ylabel(self.results_ylabels[y_label])
 
-        plt.legend(loc='best')
-        plt.xlim(*xlims)
-
         if x_log:
             plt.xscale('log')
 
+        plt.legend(loc='best')
+        plt.xlim(*xlims)
+
         plt.tight_layout()
 
-    def _add_bench(self, plt, y_axis, classes):
+    def _add_bench(self, plt, y_axis, classes, colors):
 
         if self.MLP.benchmark[y_axis + "_all"] != 0:
 
@@ -733,12 +743,15 @@ class HyperSearch(object):
                 for c in classes:
                     bench = self.MLP.benchmark[y_axis][self.cls.index(c)]
                     plt.plot([-sys.maxint, sys.maxint], [bench, bench],
-                            '--', label="[Benchmark] Class: {}".format(c))
+                             '--', label="[Benchmark] Class: {}".format(c),
+                             color=colors.next())
 
             else:
                 bench = self.MLP.benchmark[y_axis + "_all"]
                 plt.plot([-sys.maxint, sys.maxint], [bench, bench],
-                         linestyle='--', label="Stratified Random")
+                         linestyle='--', label="Stratified Random",
+                         color=colors.next()
+                         )
 
     def _multiline(self, vals):
         ''' Set up iterables for plotting multiple lines on one xy graph.
@@ -772,10 +785,7 @@ class HyperSearch(object):
         return dims, line_idx_groups, line_val_groups
 
     @staticmethod
-    def _line_setup(vals, val_groups, classes):
-        ''' Produce label differentiating lines in a 2D graph. '''
-        ranged_vals = [key for key, val in vals.items() if len(val) > 1]
-
+    def _get_palette(vals, classes):
         try:
             n_lines = reduce(lambda x, y: x * y,
                              [len(val) for val in vals.values()])
@@ -785,7 +795,19 @@ class HyperSearch(object):
         if classes:
             n_lines *= len(classes)
 
-        sns.set_palette("husl", n_lines)
+        palette = sns.color_palette("husl", n_lines)
+
+        i = 0
+
+        while True:
+            i += 1
+            j = (i % n_lines)
+            yield palette[j]
+
+    @staticmethod
+    def _line_setup(vals, val_groups, classes):
+        ''' Produce label differentiating lines in a 2D graph. '''
+        ranged_vals = [key for key, val in vals.items() if len(val) > 1]
 
         for hyper_vals in val_groups:
 
@@ -886,17 +908,17 @@ class HyperSearch(object):
         coord_sets = n_argmax(self.accuracy_all, n=n)
         print (fmt_prefix + "{:9}").format("Hyperparameter", "Benchmark"),
         for i in range(n):
-            print "| {:7}".format("Model " + str(i + 1)),
+            print "| {:8}".format("Model " + str(i + 1)),
         print
 
         for i, (name, values) in enumerate(zip(self._dim_names, self._dim_vals)):
             print (fmt_prefix + "{:>9}").format(name, "-"),
             try:  # Fail if categorical data.
                 for j in range(n):
-                    print "| {:>7.3g}".format(values[coord_sets[j][i]]),
+                    print "| {:>8.3g}".format(values[coord_sets[j][i]]),
             except ValueError:
                 for j in range(n):
-                    print "| {:>7}".format(values[coord_sets[j][i]]),
+                    print "| {:>8}".format(values[coord_sets[j][i]]),
             finally:
                 print
 
@@ -904,7 +926,7 @@ class HyperSearch(object):
         print
         print (fmt_prefix + "{:9}").format("Performance", "Benchmark"),
         for i in range(n):
-            print "| {:7}".format("Model " + str(i + 1)),
+            print "| {:8}".format("Model " + str(i + 1)),
         print
 
         specifiers = ['.3f'] * 3 + ['d']
@@ -914,7 +936,7 @@ class HyperSearch(object):
                 format(perf, self.MLP.benchmark[perf + '_all']),
             for j in range(n):
                 perf_vals = self.results[coord_sets[j]]['performance']
-                print ("| {0:7" + spec + "}").format(perf_vals[perf + "_all"]),
+                print ("| {0:8" + spec + "}").format(perf_vals[perf + "_all"]),
             print
 
         if classes:
@@ -962,7 +984,7 @@ class HyperSearch(object):
                 remaining_cls -= cls_this_line
                 print
 
-    def csv_out(self, file_name="auto.csv"):
+    def csv(self, file_name="auto.csv"):
         ''' Output results data as a CSV file for external use.
 
         The first row provides column labels. Columns are logically grouped as:
@@ -1016,6 +1038,9 @@ class HyperSearch(object):
 
             # Write lines
             for coords, vals in zip(coord_gen, val_gen):
+                if not self.success[coords]:
+                    continue
+
                 result = self.results[coords]
                 n_epochs = result['performance']['n_epochs_all']
 
