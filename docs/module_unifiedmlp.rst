@@ -27,8 +27,6 @@ Results dict reference
 
 The keys of the dict are shown below with brief explanations. Nested dicts represented as nested bullet points. Quantities end in _all when they are not per-class.
 
-* **hypers**: Complete dict of the hyperparameters under which the model was built, trained and tested.
-
 * **training**: Lists of model properties at end of each epoch.
 
   * **accuracy**: *List of lists.* Per-class accuracy on validation dataset.
