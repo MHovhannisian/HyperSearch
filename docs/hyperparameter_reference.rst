@@ -17,7 +17,7 @@ Meta-hyperparameters
 Used before neural network is created.
 
 .. _Keras: http://keras.io/
-.. _Scikit-neuralnetworks: http://scikit-neuralnetwork.readthedocs.org/en/latest/index.html
+.. _Scikit-neuralnetwork: http://scikit-neuralnetwork.readthedocs.org/en/latest/index.html
 .. _Scikit-learn: http://scikit-learn.org
 
 +----------------+---------------------------------+------------------------+------------------------+
@@ -25,7 +25,7 @@ Used before neural network is created.
 +================+=================================+========================+========================+
 | module         |Python module to use.            | **"keras"**            | `Keras`_               |
 +                +                                 +------------------------+------------------------+
-|                |                                 | "sknn"                 |`Scikit-neuralnetworks`_|
+|                |                                 | "sknn"                 |`Scikit-neuralnetwork`_ |
 +                +                                 +------------------------+------------------------+
 |                |                                 | "sklearn"              | `Scikit-learn`_        |
 +----------------+---------------------------------+------------------------+------------------------+
@@ -59,7 +59,7 @@ Hidden layer hyperparameters
 Regularisation
 """"""""""""""
 
-Mixing L2 and dropout is not supported in Scikit-Neuralnetworks.
+Mixing L2 and dropout is not supported in Scikit-Neuralnetwork.
 
 +----------------+---------------------------------+----------------+-------+----------------------------+
 | Hyperparameter | Description                     | Allowed values | N L K | Value description          |
