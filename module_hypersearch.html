@@ -1,0 +1,414 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>hypersearch — Search hyperparameter space &mdash; HyperSearch 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="HyperSearch 0.0.1 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="hypersearch-search-hyperparameter-space">
+<h1><a class="reference internal" href="#module-hypersearch" title="hypersearch"><tt class="xref py py-mod docutils literal"><span class="pre">hypersearch</span></tt></a> — Search hyperparameter space<a class="headerlink" href="#hypersearch-search-hyperparameter-space" title="Permalink to this headline">¶</a></h1>
+<p>Map out a portion of hyperparameter space. Plot graphs and output data of results.</p>
+<p>Please also check the <a class="reference internal" href="hyperparameter_reference.html"><em>hyperparameters reference guide</em></a>.</p>
+<div class="section" id="module-hypersearch">
+<span id="class-reference"></span><h2>Class reference<a class="headerlink" href="#module-hypersearch" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="hypersearch.HyperSearch">
+<em class="property">class </em><tt class="descclassname">hypersearch.</tt><tt class="descname">HyperSearch</tt><big>(</big><em>X</em>, <em>Y</em>, <em>class_names=</em>, <span class="optional">[</span><span class="optional">]</span><em>split=(0.7</em>, <em>0.15</em>, <em>0.15)</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform hyperparameter grid-search over multiple MLP implementations.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X</strong> : array-like, shape (n_samples, n_features)</p>
+<blockquote>
+<div><p>Vectors of features for each sample, where there are n_samples vectors
+each with n_features elements.</p>
+</div></blockquote>
+<p><strong>Y</strong> : array-like, shape (n_samples, n_classes)</p>
+<blockquote>
+<div><p>Vectors of labelled outcomes for each sample. UnifiedMLP expects a
+boolean or binary array specifying membership to each of n_classes
+classes.</p>
+</div></blockquote>
+<p><strong>class_names</strong> : list, shape (n_classes)</p>
+<blockquote>
+<div><p>Ordered list of names by which to refer to each outcome class for
+per-class outputting of neural network performance.</p>
+</div></blockquote>
+<p><strong>split</strong> : tuple of 3 entries, summing to 1.0 or less.</p>
+<blockquote class="last">
+<div><p>The split of data between training, validation and testing. Training
+data is passed to fit() methods, validation data is used to track
+fitting progress and can be used for early stopping, and test data is
+used for the final evaluation of model quality.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span> <span class="o">=</span> <span class="n">HyperSearch</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Ys</span><span class="p">,</span> <span class="n">class_names</span><span class="o">=</span><span class="n">class_names</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_fixed</span><span class="p">(</span><span class="n">algorithm</span><span class="o">=</span><span class="s1">&#39;adam&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_search</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">module</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;keras&#39;</span><span class="p">,</span> <span class="s1">&#39;sklearn&#39;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">dropout</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">batch_size</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">24</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">hidden_units</span><span class="o">=</span><span class="p">[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">15</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="go">Registered 80 tests to run.</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">run_tests</span><span class="p">(</span><span class="n">ignore_failure</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+<span class="go">Some tests failed due to incompatible settings:</span>
+<span class="go">Module  | Count | Error message</span>
+<span class="go">sklearn |    32 | Unsupported settings: dropout</span>
+<span class="go">[...]</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span> <span class="o">=</span> <span class="n">HyperSearch</span><span class="o">.</span><span class="n">load</span><span class="p">()</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+<span class="go">[...]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;accuracy&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;dropout&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="go">hypersearch.py:331: UserWarning: Unspecified parameters were automatically fixed:</span>
+<span class="go">    hidden_units: 10</span>
+<span class="go">    module: keras</span>
+</pre></div>
+</div>
+<p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#hypersearch.HyperSearch.csv" title="hypersearch.HyperSearch.csv"><tt class="xref py py-obj docutils literal"><span class="pre">csv</span></tt></a>([file_name])</td>
+<td>Output results data as a CSV file for external use.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#hypersearch.HyperSearch.graph" title="hypersearch.HyperSearch.graph"><tt class="xref py py-obj docutils literal"><span class="pre">graph</span></tt></a>([x_axis,&nbsp;y_axis,&nbsp;z_axis,&nbsp;x_log,&nbsp;...])</td>
+<td>Visualise a slice of the data through a graph.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#hypersearch.HyperSearch.load" title="hypersearch.HyperSearch.load"><tt class="xref py py-obj docutils literal"><span class="pre">load</span></tt></a>([file_name])</td>
+<td>Load a previously saved HyperSearch instance.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#hypersearch.HyperSearch.run_tests" title="hypersearch.HyperSearch.run_tests"><tt class="xref py py-obj docutils literal"><span class="pre">run_tests</span></tt></a>([ignore_failure])</td>
+<td>Execute the specified parameter search.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#hypersearch.HyperSearch.save" title="hypersearch.HyperSearch.save"><tt class="xref py py-obj docutils literal"><span class="pre">save</span></tt></a>([file_name])</td>
+<td>Save the state of the HyperSearch instance.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#hypersearch.HyperSearch.set_fixed" title="hypersearch.HyperSearch.set_fixed"><tt class="xref py py-obj docutils literal"><span class="pre">set_fixed</span></tt></a>(**hypers)</td>
+<td>Set hyperparameters to keep constant through the parameter sweep.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#hypersearch.HyperSearch.set_search" title="hypersearch.HyperSearch.set_search"><tt class="xref py py-obj docutils literal"><span class="pre">set_search</span></tt></a>(**hypers)</td>
+<td>Set hyperparameter ranges to search over.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#hypersearch.HyperSearch.summary" title="hypersearch.HyperSearch.summary"><tt class="xref py py-obj docutils literal"><span class="pre">summary</span></tt></a>([classes])</td>
+<td>Summarise the HyperSearch instance.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="hypersearch.HyperSearch.csv">
+<tt class="descname">csv</tt><big>(</big><em>file_name='auto.csv'</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.csv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Output results data as a CSV file for external use.</p>
+<p>The first row provides column labels. Columns are logically grouped as:</p>
+<p>[hyperparameters] [performance] [per-class performance] [training curves]        [per-class training curves]</p>
+<p>The second row describes the benchmark classifier. All inapplicable
+fields are set to zero.</p>
+<p>For the series data in the result[&#8216;training&#8217;] dict, the entire series
+is held in a quoted string.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.graph">
+<tt class="descname">graph</tt><big>(</big><em>x_axis='epoch'</em>, <em>y_axis='accuracy'</em>, <em>z_axis='accuracy'</em>, <em>x_log=False</em>, <em>y_log=False</em>, <em>classes=None</em>, <em>**vals</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Visualise a slice of the data through a graph.</p>
+<p>If the slice to take is underspecified, unconstrained hyperparameters
+are set to their value in the neural network with maximum accuracy.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>x_axis</strong> : str, &#8216;epoch&#8217; or any hyperparameter from the search.</p>
+<blockquote>
+<div><p>If &#8216;epoch&#8217;, show how MLP performance changed during training.
+If a hyperparameter, show MLP performance between models varying
+by the given hyperparameter.</p>
+</div></blockquote>
+<p><strong>y_axis</strong> : str.</p>
+<blockquote>
+<div><p>If <strong>x_axis</strong> = &#8216;epoch&#8217;, y_axis is an array of per-epoch data,
+one of:</p>
+<blockquote>
+<div><ul class="simple">
+<li><em>accuracy</em> or <em>F1</em> - performance on the validation set;</li>
+<li><em>loss</em> - loss function on the training data;</li>
+<li><em>time</em> - epoch&#8217;s wallclock training time (seconds).</li>
+</ul>
+</div></blockquote>
+<p>If <strong>x_axis</strong> = hyperparameter, y_axis is a scalar, one of:</p>
+<blockquote>
+<div><ul class="simple">
+<li><em>accuracy</em> or <em>F1</em> - performance on the test set;</li>
+<li><em>time</em> - average training time per epoch</li>
+<li><em>n_epochs</em> - number of epochs taken to reach convergence.</li>
+</ul>
+</div></blockquote>
+</div></blockquote>
+<p><strong>z_axis</strong> : str, {accuracy, F1, time, n_epochs}</p>
+<blockquote>
+<div><p>If <strong>y_axis</strong> and <strong>x_axis</strong> are both hyperparameters, a performance
+metric can be specified on the z_axis to create a 3D plot. In this
+case, options to plot multiple lines are not supported.</p>
+</div></blockquote>
+<p><strong>x_log</strong> : bool</p>
+<blockquote>
+<div><p>Use logarithmic scale on the x-axis.</p>
+</div></blockquote>
+<p><strong>y_log</strong> : bool</p>
+<blockquote>
+<div><p>For 3D graphs only. Use logarithmic scale on the y-axis.</p>
+</div></blockquote>
+<p><strong>classes</strong> : None or str or list of str or &#8216;*&#8217;</p>
+<blockquote>
+<div><p>If not None, plot separate lines for each given class, according to
+class names given at initialisation. Applies to <strong>y_axis</strong> = F1 or
+accuracy.</p>
+<p>&#8216;*&#8217; specifies all classes.</p>
+</div></blockquote>
+<p><strong>vals</strong> : Key-value pairs. Values can also be a list or &#8216;*&#8217;.</p>
+<blockquote class="last">
+<div><p>Constrain the slice of the dataset to take by fixing hyperparameters
+e.g. <cite>dropout=0.4</cite>. Provide a list or &#8216;*&#8217; to prouce a seperate line
+for each of multiple or all hyperparameter values.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<p>Results graph (x_axis set to a hyperparameter)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;n_epochs&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;batch_size&quot;</span><span class="p">)</span>
+<span class="go">UserWarning: Unspecified parameters were automatically fixed:</span>
+<span class="go">    dropout: 0.4</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;accuracy&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;dropout&quot;</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Training graph (x_axis set to &#8220;epoch&#8221;)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;epoch&quot;</span><span class="p">,</span> <span class="n">module</span><span class="o">=</span><span class="s1">&#39;sklearn&#39;</span><span class="p">,</span> <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">hidden_units</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;F1&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;epoch&quot;</span><span class="p">,</span> <span class="n">classes</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;brown_hair&#39;</span><span class="p">,</span> <span class="s1">&#39;over35&#39;</span><span class="p">,</span> <span class="s1">&#39;city_dweller&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>3D results graph (x_axis and y_axis set to hyperparameters)</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">graph</span><span class="p">(</span><span class="n">y_axis</span><span class="o">=</span><span class="s2">&quot;dropout&quot;</span><span class="p">,</span> <span class="n">x_axis</span><span class="o">=</span><span class="s2">&quot;batch_size&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="staticmethod">
+<dt id="hypersearch.HyperSearch.load">
+<em class="property">static </em><tt class="descname">load</tt><big>(</big><em>file_name='auto.save'</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load a previously saved HyperSearch instance.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.run_tests">
+<tt class="descname">run_tests</tt><big>(</big><em>ignore_failure=True</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.run_tests" title="Permalink to this definition">¶</a></dt>
+<dd><p>Execute the specified parameter search.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>ignore_failure</strong> : bool</p>
+<blockquote>
+<div><p>Continue past tests which fail due to incompatible settings. If
+True, missing data will be automatically excluded from graphs
+and made clear in csv outputs. Errors raised will be printed for
+review at the end.</p>
+</div></blockquote>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><strong>self</strong> :</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.save">
+<tt class="descname">save</tt><big>(</big><em>file_name='auto.save'</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Save the state of the HyperSearch instance.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.set_fixed">
+<tt class="descname">set_fixed</tt><big>(</big><em>**hypers</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.set_fixed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set hyperparameters to keep constant through the parameter sweep.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>self</strong> :</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_fixed</span><span class="p">(</span><span class="n">module</span><span class="o">=</span><span class="s1">&#39;sklearn&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_fixed</span><span class="p">(</span><span class="n">module</span><span class="o">=</span><span class="s1">&#39;keras&#39;</span><span class="p">,</span> <span class="n">hidden_units</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">fixed_settings_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;module&#39;</span><span class="p">:</span> <span class="s1">&#39;keras&#39;</span><span class="p">,</span> <span class="s1">&#39;algorithm&#39;</span><span class="p">:</span> <span class="s1">&#39;adam&#39;</span><span class="p">}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_fixed</span><span class="p">(</span><span class="o">**</span><span class="n">fixed_settings_dict</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.set_search">
+<tt class="descname">set_search</tt><big>(</big><em>**hypers</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.set_search" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set hyperparameter ranges to search over.</p>
+<p>Can only be run once per instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>self</strong> :</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">hypersearch</span> <span class="kn">import</span> <span class="n">HyperSearch</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span> <span class="o">=</span> <span class="n">HyperSearch</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">hs</span><span class="o">.</span><span class="n">set_search</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">module</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;sknn&#39;</span><span class="p">,</span> <span class="s1">&#39;keras&#39;</span><span class="p">,</span> <span class="s1">&#39;sklearn&#39;</span><span class="p">],</span>
+<span class="gp">... </span>    <span class="n">dropout</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">),</span>
+<span class="gp">... </span>    <span class="n">algorithm</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;adam&#39;</span><span class="p">,</span> <span class="s1">&#39;adadelta&#39;</span><span class="p">]</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="go">Registered 60 tests to run.</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="hypersearch.HyperSearch.summary">
+<tt class="descname">summary</tt><big>(</big><em>classes=False</em><big>)</big><a class="headerlink" href="#hypersearch.HyperSearch.summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Summarise the HyperSearch instance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>classes</strong> : bool</p>
+<blockquote class="last">
+<div><p>Print extra information stratifying performance by class.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hyperparameter_reference.html">Hyperparameter reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="module_unifiedmlp.html"><tt class="docutils literal"><span class="pre">unifiedmlp</span></tt> — Generic interface to MLP modules</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href=""><tt class="docutils literal"><span class="pre">hypersearch</span></tt> — Search hyperparameter space</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-hypersearch">Class reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2016, Gil Rutter.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

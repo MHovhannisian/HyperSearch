@@ -1,0 +1,449 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Hyperparameter reference &mdash; HyperSearch 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="HyperSearch 0.0.1 documentation" href="index.html" />
+    <link rel="next" title="unifiedmlp — Generic interface to MLP modules" href="module_unifiedmlp.html" />
+    <link rel="prev" title="Installation" href="install.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="module_unifiedmlp.html" title="unifiedmlp — Generic interface to MLP modules"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="hyperparameter-reference">
+<h1>Hyperparameter reference<a class="headerlink" href="#hyperparameter-reference" title="Permalink to this headline">¶</a></h1>
+<p>The <a class="reference internal" href="module_unifiedmlp.html#unifiedmlp.UnifiedMLP" title="unifiedmlp.UnifiedMLP"><tt class="xref py py-class docutils literal"><span class="pre">UnifiedMLP</span></tt></a> class requires keyword arguments are passed to its <a class="reference internal" href="module_unifiedmlp.html#unifiedmlp.UnifiedMLP.set_hypers" title="unifiedmlp.UnifiedMLP.set_hypers"><tt class="xref py py-func docutils literal"><span class="pre">set_hypers()</span></tt></a> method. The <a class="reference internal" href="module_hypersearch.html#hypersearch.HyperSearch" title="hypersearch.HyperSearch"><tt class="xref py py-class docutils literal"><span class="pre">HyperSearch</span></tt></a> class requires the same arguments for its <a class="reference internal" href="module_hypersearch.html#hypersearch.HyperSearch.set_fixed" title="hypersearch.HyperSearch.set_fixed"><tt class="xref py py-func docutils literal"><span class="pre">set_fixed()</span></tt></a> method, and the <a class="reference internal" href="module_hypersearch.html#hypersearch.HyperSearch.set_search" title="hypersearch.HyperSearch.set_search"><tt class="xref py py-func docutils literal"><span class="pre">set_search()</span></tt></a> takes keywords with a range. This page contains the appropriate keywords and values that can be passed.</p>
+<p><strong>Using this reference</strong></p>
+<ul class="simple">
+<li>Default values are highlighted in bold or stated in the <em>value description</em>.</li>
+<li>The field <em>N L K</em> gives compatibiility in Scikit-<strong>N</strong>euralnetworks, Scikit-<strong>L</strong>earn, and <strong>K</strong>eras, respectively.</li>
+</ul>
+<div class="section" id="meta-hyperparameters">
+<h2>Meta-hyperparameters<a class="headerlink" href="#meta-hyperparameters" title="Permalink to this headline">¶</a></h2>
+<p>Used before neural network is created.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="34%" />
+<col width="25%" />
+<col width="25%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td rowspan="3">module</td>
+<td rowspan="3">Python module to use.</td>
+<td><strong>&#8220;keras&#8221;</strong></td>
+<td><a class="reference external" href="http://keras.io/">Keras</a></td>
+</tr>
+<tr class="row-odd"><td>&#8220;sknn&#8221;</td>
+<td><a class="reference external" href="http://scikit-neuralnetwork.readthedocs.org/en/latest/index.html">Scikit-neuralnetwork</a></td>
+</tr>
+<tr class="row-even"><td>&#8220;sklearn&#8221;</td>
+<td><a class="reference external" href="http://scikit-learn.org">Scikit-learn</a></td>
+</tr>
+<tr class="row-odd"><td>frac_training</td>
+<td>Portion of training data to use.</td>
+<td><em>float</em>, (0,1]</td>
+<td>Default: 1.0</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="hidden-layer-hyperparameters">
+<h2>Hidden layer hyperparameters<a class="headerlink" href="#hidden-layer-hyperparameters" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>hidden_units</td>
+<td>Number of units in hidden layer</td>
+<td><em>int</em>, &gt;0</td>
+<td>✓ ✓ ✓</td>
+<td>Default: 15</td>
+</tr>
+<tr class="row-odd"><td rowspan="4">activation</td>
+<td rowspan="4"><a class="reference external" href="https://en.wikipedia.org/wiki/Activation_function">Activation function</a>
+in hidden layer.</td>
+<td><strong>relu</strong></td>
+<td>✓ ✓ ✓</td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Rectifier_%28neural_networks%29">Rectified linear units</a></td>
+</tr>
+<tr class="row-even"><td>linear</td>
+<td>✓ ✗ ✓</td>
+<td>Linear units</td>
+</tr>
+<tr class="row-odd"><td>logistic</td>
+<td>✓ ✓ ✓</td>
+<td>Logistic/Sigmoid units</td>
+</tr>
+<tr class="row-even"><td>tanh</td>
+<td>✓ ✓ ✓</td>
+<td>Tanh units</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="regularisation">
+<h2>Regularisation<a class="headerlink" href="#regularisation" title="Permalink to this headline">¶</a></h2>
+<p>Mixing L2 and dropout is not supported in Scikit-Neuralnetwork.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>alpha</td>
+<td>L2 penalty</td>
+<td><em>float</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: 0.0000</td>
+</tr>
+<tr class="row-odd"><td>dropout</td>
+<td>Dropout probability</td>
+<td><em>float</em>, (0,1]</td>
+<td>✓ ✗ ✓</td>
+<td>Default: 0.0</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="learning">
+<h2>Learning<a class="headerlink" href="#learning" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td rowspan="3">algorithm</td>
+<td rowspan="3">Learning algorithm</td>
+<td><strong>sgd</strong></td>
+<td>✓ ✓ ✓</td>
+<td>Stochastic gradient descent</td>
+</tr>
+<tr class="row-odd"><td>adadelta</td>
+<td>✓ ✗ ✓</td>
+<td><a class="reference external" href="http://sebastianruder.com/optimizing-gradient-descent/index.html#adadelta">Adadelta</a></td>
+</tr>
+<tr class="row-even"><td>adam</td>
+<td>✗ ✓ ✓</td>
+<td><a class="reference external" href="http://sebastianruder.com/optimizing-gradient-descent/index.html#adam">Adam</a></td>
+</tr>
+<tr class="row-odd"><td>learning_rate</td>
+<td>Learning rate (SGD and Adam)</td>
+<td><em>float</em>, &gt;0</td>
+<td>✓ ✓ ✓</td>
+<td>Default: 0.001</td>
+</tr>
+<tr class="row-even"><td>batch_size</td>
+<td>Samples per minibatch</td>
+<td><em>int</em>, &gt;0</td>
+<td>✓ ✓ ✓</td>
+<td>Default: 16</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="sgd-settings">
+<h2>SGD settings<a class="headerlink" href="#sgd-settings" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>learning_decay</td>
+<td>Per-epoch learning rate decay</td>
+<td><em>float</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: 0.0</td>
+</tr>
+<tr class="row-odd"><td>momentum</td>
+<td>Momentum term</td>
+<td><em>float</em>, [0,1]</td>
+<td>✓ ✓ ✓</td>
+<td>Default: 0.9</td>
+</tr>
+<tr class="row-even"><td>nesterov</td>
+<td>Nesterov&#8217;s momentum</td>
+<td><em>bool</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: False</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="adam-settings">
+<h2>Adam settings<a class="headerlink" href="#adam-settings" title="Permalink to this headline">¶</a></h2>
+<p>The defaults are usually good options.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>beta_1</td>
+<td>Decay rate, first moment vector</td>
+<td><em>float</em>, [0,1)</td>
+<td>✗ ✓ ✓</td>
+<td>Default: 0.0</td>
+</tr>
+<tr class="row-odd"><td>beta_2</td>
+<td>Decay rate second moment vector</td>
+<td><em>float</em>, [0,1)</td>
+<td>✗ ✓ ✓</td>
+<td>Default: 0.9</td>
+</tr>
+<tr class="row-even"><td>epsilon</td>
+<td>Value for numerical stability</td>
+<td><em>float</em>, [0,1)</td>
+<td>✗ ✓ ✓</td>
+<td>Default: False</td>
+</tr>
+</tbody>
+</table>
+<div class="line-block">
+<div class="line"><br /></div>
+</div>
+</div>
+<div class="section" id="stopping-criteria">
+<h2>Stopping criteria<a class="headerlink" href="#stopping-criteria" title="Permalink to this headline">¶</a></h2>
+<p>Controlled uniformly by <a class="reference internal" href="module_unifiedmlp.html#module-unifiedmlp" title="unifiedmlp"><tt class="xref py py-mod docutils literal"><span class="pre">unifiedmlp</span></tt></a> itself, rather than the individual modules.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="33%" />
+<col width="16%" />
+<col width="7%" />
+<col width="28%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Hyperparameter</th>
+<th class="head">Description</th>
+<th class="head">Allowed values</th>
+<th class="head">N L K</th>
+<th class="head">Value description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>max_epoch</td>
+<td>Maximum epochs before stopping</td>
+<td><em>int</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: 100</td>
+</tr>
+<tr class="row-odd"><td>epoch_tol</td>
+<td>Tolerance on stopping criteria</td>
+<td><em>float</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: 0.001</td>
+</tr>
+<tr class="row-even"><td>n_stable</td>
+<td>Consecutive stable epochs
+before stopping</td>
+<td><em>int</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: 3</td>
+</tr>
+<tr class="row-odd"><td>early_stopping</td>
+<td>Add performance on validation
+data to stopping criteria.</td>
+<td><em>bool</em></td>
+<td>✓ ✓ ✓</td>
+<td>Default: True</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Hyperparameter reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#meta-hyperparameters">Meta-hyperparameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#hidden-layer-hyperparameters">Hidden layer hyperparameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#regularisation">Regularisation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#learning">Learning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sgd-settings">SGD settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adam-settings">Adam settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#stopping-criteria">Stopping criteria</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="module_unifiedmlp.html"><tt class="docutils literal"><span class="pre">unifiedmlp</span></tt> — Generic interface to MLP modules</a></li>
+<li class="toctree-l1"><a class="reference internal" href="module_hypersearch.html"><tt class="docutils literal"><span class="pre">hypersearch</span></tt> — Search hyperparameter space</a></li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="module_unifiedmlp.html" title="unifiedmlp — Generic interface to MLP modules"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             >previous</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2016, Gil Rutter.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

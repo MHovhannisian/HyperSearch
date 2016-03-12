@@ -1,0 +1,283 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>unifiedmlp — Generic interface to MLP modules &mdash; HyperSearch 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="HyperSearch 0.0.1 documentation" href="index.html" />
+    <link rel="prev" title="Hyperparameter reference" href="hyperparameter_reference.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="hyperparameter_reference.html" title="Hyperparameter reference"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="toctree-wrapper compound">
+<ul class="simple">
+</ul>
+</div>
+<div class="section" id="unifiedmlp-generic-interface-to-mlp-modules">
+<h1><a class="reference internal" href="#module-unifiedmlp" title="unifiedmlp"><tt class="xref py py-mod docutils literal"><span class="pre">unifiedmlp</span></tt></a> — Generic interface to MLP modules<a class="headerlink" href="#unifiedmlp-generic-interface-to-mlp-modules" title="Permalink to this headline">¶</a></h1>
+<p>The unified interface to multilayer perceptron implementations in Python.</p>
+<p>Quick-start:</p>
+<ul class="simple">
+<li>Instantiate a <a class="reference internal" href="#unifiedmlp.UnifiedMLP" title="unifiedmlp.UnifiedMLP"><tt class="xref py py-class docutils literal"><span class="pre">UnifiedMLP</span></tt></a> instance with an associated dataset <tt class="docutils literal"><span class="pre">X,</span> <span class="pre">Y</span></tt>.</li>
+<li>Run <a class="reference internal" href="#unifiedmlp.UnifiedMLP.set_hypers" title="unifiedmlp.UnifiedMLP.set_hypers"><tt class="xref py py-func docutils literal"><span class="pre">set_hypers()</span></tt></a> to specify non-default hyperparameters of the neural network.</li>
+<li>Run <a class="reference internal" href="#unifiedmlp.UnifiedMLP.run_test" title="unifiedmlp.UnifiedMLP.run_test"><tt class="xref py py-func docutils literal"><span class="pre">run_test()</span></tt></a> to perform a fitting. Returns a dict with fitting history and performance measures.</li>
+</ul>
+<p>Please also check the <a class="reference internal" href="hyperparameter_reference.html"><em>hyperparameters reference guide</em></a>.</p>
+<div class="section" id="module-unifiedmlp">
+<span id="class-reference"></span><h2>Class reference<a class="headerlink" href="#module-unifiedmlp" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="unifiedmlp.UnifiedMLP">
+<em class="property">class </em><tt class="descclassname">unifiedmlp.</tt><tt class="descname">UnifiedMLP</tt><big>(</big><em>X</em>, <em>Y</em>, <em>split=(0.7</em>, <em>0.15</em>, <em>0.15)</em><big>)</big><a class="headerlink" href="#unifiedmlp.UnifiedMLP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unified interface to compare neural network modules and hyperparameters.</p>
+<p>The module is initialised with arguments that associate it with a dataset.
+Then, neural networks from multiple packages with specified hyperparameters
+can be trained to this dataset and the results compared.</p>
+<p>After initialisation, a dict self.benchmark in the results dict format is
+accessible. The stratified random approach of randomly assigning outcomes
+with correct class weights is used. <a class="reference internal" href="#results-dict"><em>Results dict reference</em></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X</strong> : array-like, shape (n_samples, n_features)</p>
+<blockquote>
+<div><p>Vectors of features for each sample, where there are n_samples vectors
+each with n_features elements.</p>
+</div></blockquote>
+<p><strong>Y</strong> : array-like, shape (n_samples, n_classes)</p>
+<blockquote>
+<div><p>Vectors of labelled outcomes for each sample. UnifiedMLP expects a
+boolean or binary array specifying membership to each of n_classes
+classes.</p>
+</div></blockquote>
+<p><strong>split</strong> : tuple of 3 entries, summing to 1.0 or less.</p>
+<blockquote class="last">
+<div><p>The split of data between training, validation and testing. Training
+data is passed to fit() methods, validation data is used to track
+fitting progress and can be used for early stopping, and test data is
+used for the final evaluation of model quality.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Examples</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">nn</span> <span class="o">=</span> <span class="n">UnifiedMLP</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Ys</span><span class="p">)</span><span class="o">.</span><span class="n">set_hypers</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">batch_size</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">module</span><span class="o">=</span><span class="s1">&#39;keras&#39;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">dropout</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">max_epoch</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">results</span><span class="p">,</span> <span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">run_test</span><span class="p">()</span>
+</pre></div>
+</div>
+<p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#unifiedmlp.UnifiedMLP.get_hypers" title="unifiedmlp.UnifiedMLP.get_hypers"><tt class="xref py py-obj docutils literal"><span class="pre">get_hypers</span></tt></a>()</td>
+<td>Return neural network hyperparameters.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#unifiedmlp.UnifiedMLP.run_test" title="unifiedmlp.UnifiedMLP.run_test"><tt class="xref py py-obj docutils literal"><span class="pre">run_test</span></tt></a>()</td>
+<td>Build, train and test a neural network architecture.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#unifiedmlp.UnifiedMLP.set_hypers" title="unifiedmlp.UnifiedMLP.set_hypers"><tt class="xref py py-obj docutils literal"><span class="pre">set_hypers</span></tt></a>(**new_settings)</td>
+<td>Set the hyperparameters with which neural networks are built.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="unifiedmlp.UnifiedMLP.get_hypers">
+<tt class="descname">get_hypers</tt><big>(</big><big>)</big><a class="headerlink" href="#unifiedmlp.UnifiedMLP.get_hypers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return neural network hyperparameters.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>nn_settings</strong> : dict</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="unifiedmlp.UnifiedMLP.run_test">
+<tt class="descname">run_test</tt><big>(</big><big>)</big><a class="headerlink" href="#unifiedmlp.UnifiedMLP.run_test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Build, train and test a neural network architecture.</p>
+<p>Guarentee: If settings incompatible with a specific module are passed,
+<tt class="docutils literal"><span class="pre">KeyError</span></tt> is raised.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>results</strong> : dict</p>
+<blockquote>
+<div><p>Results of the test. <a class="reference internal" href="#results-dict"><em>Results dict reference</em></a>.</p>
+</div></blockquote>
+<p><strong>hypers</strong> : dict</p>
+<blockquote>
+<div><p>Complete dict of hyperparameters used.</p>
+</div></blockquote>
+<p><strong>model</strong> : object</p>
+<blockquote class="last">
+<div><p>The MLP object resulting from running the test, with a class
+dependent on the module which was used.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="unifiedmlp.UnifiedMLP.set_hypers">
+<tt class="descname">set_hypers</tt><big>(</big><em>**new_settings</em><big>)</big><a class="headerlink" href="#unifiedmlp.UnifiedMLP.set_hypers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the hyperparameters with which neural networks are built.</p>
+<p>Takes keyword arguments setting neural network hyperparameters.
+<a class="reference internal" href="hyperparameter_reference.html"><em>Hyperparameters reference guide</em></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>self</strong> :</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="results-dict-reference">
+<span id="results-dict"></span><h2>Results dict reference<a class="headerlink" href="#results-dict-reference" title="Permalink to this headline">¶</a></h2>
+<p>The keys of the dict are shown below with brief explanations. Nested dicts represented as nested bullet points. Quantities end in _all when they are not per-class.</p>
+<ul class="simple">
+<li><strong>training</strong>: Lists of model properties at end of each epoch.<ul>
+<li><strong>accuracy</strong>: <em>List of lists.</em> Per-class accuracy on validation dataset.</li>
+<li><strong>F1</strong>: <em>List of lists.</em> Per-class F1 score on validation dataset.</li>
+<li><strong>loss_all</strong>: <em>List.</em> Training loss on the training dataset.</li>
+<li><strong>time_all</strong>: <em>List.</em> Wallclock training time in seconds.</li>
+<li><strong>accuracy_all</strong>: <em>List.</em> Accuracy on validation dataset.</li>
+<li><strong>F1_all</strong>: <em>List.</em> F1 score on validation dataset.</li>
+</ul>
+</li>
+<li><strong>performance</strong>: Model properties after training.<ul>
+<li><strong>accuracy</strong>: <em>List.</em> Per-class accuracy on test dataset.</li>
+<li><strong>F1</strong>: <em>List.</em> Per-class F1 score on test dataset.</li>
+<li><strong>time_all</strong>: <em>Float.</em> Average training time in seconds for one epoch.</li>
+<li><strong>accuracy_all</strong>: <em>Float.</em> Accuracy on test dataset.</li>
+<li><strong>F1_all</strong>: <em>Float.</em> F1 score on validation dataset.</li>
+<li><strong>n_epochs_all</strong>: <em>Int.</em> Epochs taken to reach training convergence.</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hyperparameter_reference.html">Hyperparameter reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href=""><tt class="docutils literal"><span class="pre">unifiedmlp</span></tt> — Generic interface to MLP modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-unifiedmlp">Class reference</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#results-dict-reference">Results dict reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="module_hypersearch.html"><tt class="docutils literal"><span class="pre">hypersearch</span></tt> — Search hyperparameter space</a></li>
+</ul>
+
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="hyperparameter_reference.html" title="Hyperparameter reference"
+             >previous</a> |</li>
+        <li><a href="index.html">HyperSearch 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2016, Gil Rutter.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
