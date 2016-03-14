@@ -515,7 +515,7 @@ class HyperSearch(object):
                 print 'No data for "' + labels.next() + '"'
                 colors.next()
 
-        self._add_bench(plt, y_axis, classes, colors)
+        self._add_bench(plt, y_axis, classes, colors, x_log)
         self._2D_graph_settings(plt, "epoch", y_axis, x_log, (0, max_epoch - 1))
         plt.show()
 
@@ -573,6 +573,7 @@ class HyperSearch(object):
         # Set up a line for all combinations in vals
         lines_dims, line_idx_groups, line_val_groups = self._multiline(vals)
         labels = self._line_setup(vals, line_val_groups, classes)
+
         colors = self._get_palette(vals, classes)
 
         # Plotting loop
@@ -624,7 +625,7 @@ class HyperSearch(object):
                 print 'No data for "' + labels.next() + '"'
                 colors.next()
 
-        self._add_bench(plt, y_axis, classes, colors)
+        self._add_bench(plt, y_axis, classes, colors, x_log)
         xlims = (x_master[0] - border, x_master[-1] + border)
         self._2D_graph_settings(plt, x_axis, y_axis, x_log, xlims)
 
@@ -735,21 +736,25 @@ class HyperSearch(object):
 
         plt.tight_layout()
 
-    def _add_bench(self, plt, y_axis, classes, colors):
+    def _add_bench(self, plt, y_axis, classes, colors, x_log):
+
+        lo, hi = -sys.maxint, sys.maxint
+        if x_log:
+            lo = sys.float_info.min
 
         if self.MLP.benchmark[y_axis + "_all"] != 0:
 
             if classes:
                 for c in classes:
                     bench = self.MLP.benchmark[y_axis][self.cls.index(c)]
-                    plt.plot([-sys.maxint, sys.maxint], [bench, bench],
+                    plt.plot([lo, hi], [bench, bench],
                              '--', label="[Benchmark] Class: {}".format(c),
                              color=colors.next())
 
             else:
                 bench = self.MLP.benchmark[y_axis + "_all"]
-                plt.plot([-sys.maxint, sys.maxint], [bench, bench],
-                         linestyle='--', label="Stratified Random",
+                plt.plot([lo, hi], [bench, bench],
+                         linestyle='--', label="Sensible settings (Scikit-learn)",
                          color=colors.next()
                          )
 
@@ -840,7 +845,7 @@ class HyperSearch(object):
                               if key not in search_hypers}
         return static_hyperparams
 
-    def summary(self, classes=False):
+    def summary(self, n_models=3, classes=False):
         ''' Summarise the HyperSearch instance.
 
         Parameters
@@ -884,7 +889,7 @@ class HyperSearch(object):
             print
 
             if self.ran.all():
-                self._show_perf_summary(fmt_prefix, classes=classes)
+                self._show_perf_summary(fmt_prefix, classes=classes, n=n_models)
 
             else:
                 print "The hyperparameter search is incomplete."
