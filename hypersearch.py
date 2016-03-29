@@ -754,7 +754,7 @@ class HyperSearch(object):
             else:
                 bench = self.MLP.benchmark[y_axis + "_all"]
                 plt.plot([lo, hi], [bench, bench],
-                         linestyle='--', label="Sensible settings (Scikit-learn)",
+                         linestyle='--', label="Benchmark",
                          color=colors.next()
                          )
 
