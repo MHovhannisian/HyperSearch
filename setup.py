@@ -6,5 +6,5 @@ setup(
     name='HyperSearch',
     author='Gil Rutter',
     author_email='gil.rutter@sclgroup.cc',
-    py_modules=['hypersearch', 'unifiedmlp']
+    py_modules=['hypersearch', 'unifiedmlp', 'sphinx_rtd_theme']
 )
